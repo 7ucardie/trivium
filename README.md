@@ -8,13 +8,13 @@ roads: answered locally, opened in Claude Code, or opened in Codex, on the model
 
 ```text
 $ ask why "add retry with exponential backoff to the http client in server.py"
-→ codex-sol (gpt-6-sol) · code_change/moderate/workspace · 372 ms · rule 3
+→ codex-sol (gpt-6-sol) · code_change/trivial/workspace · 258 ms · rule 3
   kind       code_change=1.00  quick_answer=0.00  design=0.00  debugging=0.00  review=0.00  writing=0.00
-  difficulty moderate=0.81  trivial=0.18  hard=0.01
-  tools      workspace=1.00  none=0.00
+  difficulty trivial=0.78  moderate=0.22  hard=0.00
+  tools      workspace=0.99  none=0.01
 
 $ ask -p "what does HTTP 409 mean"
-→ local (Qwen/Qwen3.5-4B) · quick_answer/trivial/none · 292 ms · rule 1
+→ local (Qwen/Qwen3.5-4B) · quick_answer/trivial/none · 258 ms · rule 1
 **HTTP 409 Conflict** is a server response status code indicating ...
 ```
 
