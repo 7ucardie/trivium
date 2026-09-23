@@ -1,5 +1,7 @@
 # Trivium
 
+[![test](https://github.com/7ucardie/trivium/actions/workflows/test.yml/badge.svg)](https://github.com/7ucardie/trivium/actions/workflows/test.yml)
+
 A local System-1 router that sends each prompt to the right model: a local Qwen, Claude Code, or Codex.
 
 *Trivium* is Latin for the place where three roads meet. You type one command; a small model on your
