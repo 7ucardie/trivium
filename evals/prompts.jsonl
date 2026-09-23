@@ -1,0 +1,36 @@
+{"prompt": "what's the difference between git rebase and git merge in one sentence", "repo": null, "expect": {"kind": "quick_answer", "difficulty": "trivial", "tools": "none"}}
+{"prompt": "convert 72 fahrenheit to celsius", "repo": null, "expect": {"kind": "quick_answer", "difficulty": "trivial", "tools": "none"}}
+{"prompt": "what does HTTP 409 mean", "repo": null, "expect": {"kind": "quick_answer", "difficulty": "trivial", "tools": "none"}}
+{"prompt": "how do I list listening ports on macos", "repo": null, "expect": {"kind": "quick_answer", "difficulty": "trivial", "tools": "none"}}
+{"prompt": "regex to match a semver string like 1.2.3", "repo": null, "expect": {"kind": "quick_answer", "difficulty": "trivial", "tools": "none"}}
+{"prompt": "give me 5 names for a cat that likes boxes", "repo": null, "expect": {"kind": "writing", "difficulty": "trivial", "tools": "none"}}
+{"prompt": "rewrite this sentence to sound less formal: 'Please be advised that the meeting has been rescheduled.'", "repo": null, "expect": {"kind": "writing", "difficulty": "trivial", "tools": "none"}}
+{"prompt": "draft a polite email declining a vendor demo next week", "repo": null, "expect": {"kind": "writing", "difficulty": "moderate", "tools": "none"}}
+{"prompt": "write a README for this repo explaining install and usage", "repo": "trivium", "expect": {"kind": "writing", "difficulty": "moderate", "tools": "workspace"}}
+{"prompt": "summarize the tradeoffs between Postgres logical replication and Debezium CDC for a 2TB database that needs zero-downtime migration to a new region", "repo": null, "expect": {"kind": "design", "difficulty": "hard", "tools": "none"}}
+{"prompt": "rename the function load_cfg to load_config everywhere in this project", "repo": "trivium", "expect": {"kind": "code_change", "difficulty": "trivial", "tools": "workspace"}}
+{"prompt": "add a --json flag to the cli that prints the decision as json", "repo": "trivium", "expect": {"kind": "code_change", "difficulty": "moderate", "tools": "workspace"}}
+{"prompt": "add retry with exponential backoff to the http client in server.py", "repo": "trivium", "expect": {"kind": "code_change", "difficulty": "moderate", "tools": "workspace"}}
+{"prompt": "fix the typo in the README heading", "repo": "trivium", "expect": {"kind": "code_change", "difficulty": "trivial", "tools": "workspace"}}
+{"prompt": "migrate the whole codebase from sync requests to asyncio + httpx, keep the public API stable, and update all tests", "repo": "trivium", "expect": {"kind": "code_change", "difficulty": "hard", "tools": "workspace"}}
+{"prompt": "implement a write-ahead log with crash recovery for our key value store, including fsync semantics and tests for torn writes", "repo": "trivium", "expect": {"kind": "code_change", "difficulty": "hard", "tools": "workspace"}}
+{"prompt": "write a python function that flattens a nested list", "repo": null, "expect": {"kind": "code_change", "difficulty": "trivial", "tools": "none"}}
+{"prompt": "write a bash one-liner that deletes all .DS_Store files recursively", "repo": null, "expect": {"kind": "quick_answer", "difficulty": "trivial", "tools": "none"}}
+{"prompt": "the test test_via_keeps_tier fails with KeyError 'tier', figure out why", "repo": "trivium", "expect": {"kind": "debugging", "difficulty": "moderate", "tools": "workspace"}}
+{"prompt": "why does this throw 'TypeError: NoneType object is not subscriptable'?\n\n    user = db.get(id)\n    print(user['name'])", "repo": null, "expect": {"kind": "debugging", "difficulty": "trivial", "tools": "none"}}
+{"prompt": "our p99 latency doubled after last week's deploy, only on arm64 nodes, and only under load. find the cause", "repo": "trivium", "expect": {"kind": "debugging", "difficulty": "hard", "tools": "workspace"}}
+{"prompt": "memory keeps growing in the server process until it gets OOM killed after about 6 hours, investigate", "repo": "trivium", "expect": {"kind": "debugging", "difficulty": "hard", "tools": "workspace"}}
+{"prompt": "npm install fails with EACCES permission denied, how do I fix it", "repo": null, "expect": {"kind": "debugging", "difficulty": "trivial", "tools": "none"}}
+{"prompt": "the build is broken on main, see what's wrong", "repo": "trivium", "expect": {"kind": "debugging", "difficulty": "moderate", "tools": "workspace"}}
+{"prompt": "explain what policy.via does", "repo": "trivium", "expect": {"kind": "review", "difficulty": "trivial", "tools": "workspace"}}
+{"prompt": "review my uncommitted changes for bugs", "repo": "trivium", "expect": {"kind": "review", "difficulty": "moderate", "tools": "workspace"}}
+{"prompt": "do a security review of the authentication and session handling across the whole service", "repo": "trivium", "expect": {"kind": "review", "difficulty": "hard", "tools": "workspace"}}
+{"prompt": "explain how python's GIL works", "repo": null, "expect": {"kind": "quick_answer", "difficulty": "moderate", "tools": "none"}}
+{"prompt": "should we use a monorepo or polyrepo for 4 services and 2 frontends with a team of 6", "repo": null, "expect": {"kind": "design", "difficulty": "moderate", "tools": "none"}}
+{"prompt": "plan the architecture for multi-tenant billing with usage metering, proration, invoices and dunning, integrating with stripe", "repo": null, "expect": {"kind": "design", "difficulty": "hard", "tools": "none"}}
+{"prompt": "design the plugin system for this cli so third parties can add new targets", "repo": "trivium", "expect": {"kind": "design", "difficulty": "hard", "tools": "workspace"}}
+{"prompt": "which is better for this project, sqlite or duckdb for the decision log?", "repo": "trivium", "expect": {"kind": "design", "difficulty": "moderate", "tools": "workspace"}}
+{"prompt": "write a blog post about local model routing, about 1500 words", "repo": null, "expect": {"kind": "writing", "difficulty": "moderate", "tools": "none"}}
+{"prompt": "write the changelog entry for the changes in this branch", "repo": "trivium", "expect": {"kind": "writing", "difficulty": "trivial", "tools": "workspace"}}
+{"prompt": "what time zone is Tokyo in", "repo": null, "expect": {"kind": "quick_answer", "difficulty": "trivial", "tools": "none"}}
+{"prompt": "add type hints to cli.py", "repo": "trivium", "expect": {"kind": "code_change", "difficulty": "trivial", "tools": "workspace"}}

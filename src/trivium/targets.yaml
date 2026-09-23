@@ -1,0 +1,82 @@
+# trivium routing config. Copy to ~/.config/trivium/targets.yaml (or set TRIVIUM_CONFIG) to customise.
+#
+# Flow: the local router answers each question below with a probability per option,
+# then the first rule whose `when` matches picks a target. If any answer is less
+# confident than `min_confidence`, the `fallback` target is used instead.
+
+router:
+  backend: semif        # semif (Qwen, can also answer locally) or laya (needs `uv sync --extra laya`)
+  model: Qwen/Qwen3.5-4B
+  revision: 851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a   # semif requires a pinned commit
+  bits: null            # null = bf16 (~8 GB RAM, semif-validated); 8 or 4 = in-memory quantisation
+  max_prompt_chars: 2500  # the request is front-loaded; longer prompts keep head + tail
+  port: 8765
+  laya_model: convaiinnovations/laya
+  laya_subfolder: null  # null = English checkpoint; multilingual or typed-decisions
+
+# Questions ask what the text *says*, not what to do; every option is described.
+questions:
+  kind:
+    question: What is the request mainly asking for?
+    options:
+      quick_answer: a short factual answer, definition, conversion or one-line shell command
+      code_change: writing, editing, refactoring or configuring code
+      debugging: finding the cause of an error, crash, failing test or unexpected behaviour
+      review: reading, reviewing or explaining existing code
+      design: architecture, planning, comparing approaches or weighing trade-offs
+      writing: prose such as docs, emails, summaries, names or brainstorming
+  difficulty:
+    # Effort-in-time wording beat an abstract "how demanding" (67% -> 81% on evals/prompts.jsonl).
+    question: How much work would a skilled engineer need for this request?
+    options:
+      trivial: a quick answer or a small mechanical edit, done in a few minutes
+      moderate: a focused task of up to an hour with a clear path
+      hard: hours or days of work, open-ended investigation, or many interacting parts
+  tools:
+    question: Does the request refer to files, a repository, the current project, or commands to run?
+    options:
+      none: no, it can be answered from general knowledge alone
+      workspace: yes, it needs to read or change files or run commands
+
+min_confidence:
+  kind: 0.45
+  difficulty: 0.45
+  tools: 0.55
+
+# tier lets `--via claude|codex` swap a target for the other vendor's equivalent.
+targets:
+  local:          {vendor: local,  tier: local,    model: Qwen/Qwen3.5-4B}
+  claude-haiku:   {vendor: claude, tier: fast,     model: claude-haiku-4-5}
+  claude-sonnet:  {vendor: claude, tier: mid,      model: claude-sonnet-5}
+  claude-opus:    {vendor: claude, tier: frontier, model: claude-opus-5-5}
+  claude-fable:   {vendor: claude, tier: max,      model: claude-fable-5-1}
+  codex-luna:     {vendor: codex,  tier: fast,     model: gpt-6-luna,  effort: medium}
+  codex-sol:      {vendor: codex,  tier: mid,      model: gpt-6-sol,   effort: high}
+  codex-astra:    {vendor: codex,  tier: frontier, model: gpt-6-astra, effort: high}
+  codex-astra-max: {vendor: codex, tier: max,      model: gpt-6-astra, effort: xhigh}
+  # Older Codex models, reachable with `ask --to <name>`:
+  codex-5.6-sol:   {vendor: codex, tier: mid,  model: gpt-5.6-sol}
+  codex-5.6-terra: {vendor: codex, tier: mid,  model: gpt-5.6-terra}
+  codex-5.6-luna:  {vendor: codex, tier: fast, model: gpt-5.6-luna}
+  codex-5.5:       {vendor: codex, tier: mid,  model: gpt-5.5}
+
+# First match wins. A `when` value may be one option or a list of options.
+# Defaults: Codex writes code; Claude debugs, reviews, designs and writes.
+rules:
+  - when: {kind: [quick_answer, writing], difficulty: trivial, tools: none}
+    to: local
+  - when: {difficulty: trivial, tools: none}
+    to: claude-haiku
+  - when: {kind: code_change, difficulty: [trivial, moderate]}
+    to: codex-sol
+  - when: {kind: code_change, difficulty: hard}
+    to: codex-astra
+  - when: {kind: design, difficulty: hard}
+    to: claude-fable
+  - when: {difficulty: hard}
+    to: claude-opus
+  - when: {difficulty: trivial}
+    to: claude-haiku
+
+default: claude-sonnet    # no rule matched
+fallback: claude-sonnet   # router unsure

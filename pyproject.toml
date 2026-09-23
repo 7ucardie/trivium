@@ -1,0 +1,33 @@
+[project]
+name = "trivium"
+version = "0.1.0"
+description = "A local System-1 router that sends each prompt to the right model: a local Qwen, Claude Code, or Codex."
+requires-python = ">=3.10,<3.14"
+dependencies = [
+  "pyyaml>=6",
+  # semif pins torch/transformers; its MLX backend is what we actually use on Apple Silicon.
+  "semif-phase1[mlx] @ git+https://github.com/theoleecj/semif@1f2dea3e25379f9dfc98cb83c324f00ab5deda37",
+]
+
+[project.optional-dependencies]
+laya = ["laya==0.3.7"]
+
+[project.scripts]
+ask = "trivium.cli:main"
+trivium = "trivium.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+trivium = ["targets.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
