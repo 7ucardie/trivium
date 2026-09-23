@@ -189,7 +189,7 @@ calibration:
 ```
 
 Two lessons from the bundled set. First, fit on a few hundred labels, not 36: on this set Laya's
-tools answers are nearly always right yet reported at 0.5 to 0.7, so the fit runs to the edge of
+tools answers are right 35 times in 36 yet reported at a median confidence of 0.75, so the fit runs to the edge of
 the allowed range. Second, re-choose `min_confidence` after calibrating. Temperatures change the
 scale the thresholds are read on: applying semif's fitted temperatures with thresholds tuned on raw
 scores sent more prompts to the fallback and lowered the right-target rate from 80.6% to 75.0%.
