@@ -1,0 +1,21 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # The tests use fake engines, so they need neither Apple Silicon nor model weights.
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Run tests without the model stack
+        env:
+          PYTHONPATH: src
+        run: uv run --no-project --python ${{ matrix.python }} --with pyyaml --with pytest pytest -q

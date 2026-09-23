@@ -2,12 +2,15 @@
 
   ask "fix the flaky auth test"      route, then open an interactive session
   ask -p "what does EPERM mean"      one-shot: print the answer and exit
+  ask --ask "..."                    show the likeliest targets and let me pick
   ask --to opus "..."                skip the router (still logged as a label)
   ask --via codex "..."              route, then use the Codex model of the same tier
   ask why "..."                      show the decision without running anything
   ask serve                          keep the router model warm (recommended)
+  ask service install|uninstall|status   run `ask serve` at login with launchd
   ask rate good|bad [--should T]     label the last decision
   ask eval evals/prompts.jsonl       measure router accuracy on labelled prompts
+  ask calibrate evals/prompts.jsonl  fit per-question temperatures from labelled prompts
   ask targets                        list targets and the config in use
 """
 
@@ -22,7 +25,11 @@ import time
 from . import config, launch, log, policy, state
 from .server import Remote
 
-SUBCOMMANDS = {"why", "serve", "rate", "eval", "targets"}
+BACKENDS = ["semif", "laya", "hybrid"]
+
+
+def backend_name(cfg: dict, name: str | None = None) -> str:
+    return name or cfg["router"].get("backend", "semif")
 
 
 def load_engine(cfg: dict, name: str):
@@ -30,15 +37,19 @@ def load_engine(cfg: dict, name: str):
         from .laya_engine import LayaEngine
 
         return LayaEngine(cfg["router"])
+    if name == "hybrid":
+        from .hybrid import HybridEngine
+
+        return HybridEngine(cfg["router"])
     from .engine import Engine
 
     return Engine(cfg["router"])
 
 
 def backend(cfg: dict, name: str | None = None):
-    """The warm server if it is up and no specific backend was asked for, else load in-process."""
-    name = name or cfg["router"].get("backend", "semif")
-    if name == cfg["router"].get("backend", "semif"):
+    """The warm server if it is up and runs the backend asked for, else load in-process."""
+    name = backend_name(cfg, name)
+    if name == backend_name(cfg):
         remote = Remote(cfg["router"]["port"])
         if remote.alive():
             return remote
@@ -46,12 +57,17 @@ def backend(cfg: dict, name: str | None = None):
     return load_engine(cfg, name)
 
 
-def route(cfg: dict, engine, prompt: str, repo: str | None) -> tuple[policy.Decision, float]:
+def raw_route(cfg: dict, engine, prompt: str, repo: str | None) -> tuple[dict, float]:
     evidence = state.build(prompt, repo, cfg["router"]["max_prompt_chars"])
     started = time.perf_counter()
     probs, _ = engine.route(evidence, cfg["questions"])
-    elapsed = time.perf_counter() - started
-    return policy.decide(cfg, policy.summarize(probs)), elapsed
+    return probs, time.perf_counter() - started
+
+
+def route(cfg: dict, engine, prompt: str, repo: str | None, name: str) -> tuple[policy.Decision, float]:
+    probs, elapsed = raw_route(cfg, engine, prompt, repo)
+    answers = policy.summarize(probs, config.temperatures(cfg, name))
+    return policy.decide(cfg, answers), elapsed
 
 
 def describe(cfg: dict, decision: policy.Decision, elapsed: float | None, verbose: bool) -> str:
@@ -66,10 +82,31 @@ def describe(cfg: dict, decision: policy.Decision, elapsed: float | None, verbos
     return line
 
 
+def pick(cfg: dict, decision: policy.Decision, tty=None) -> str | None:
+    """Show the likeliest targets and read a choice from the terminal. None keeps the decision."""
+    options = policy.alternatives(cfg, decision.answers)[:3]
+    if tty is None:
+        try:
+            tty = open("/dev/tty", "r+")
+        except OSError:
+            return None  # no terminal (a pipe or a script): keep the router's decision
+    with tty:
+        tty.write("trivium: pick a target\n")
+        for i, (name, p) in enumerate(options, 1):
+            tty.write(f"  {i}) {name:<16} {cfg['targets'][name]['model']:<20} {p:5.0%}\n")
+        tty.write(f"  Enter keeps {decision.target}: ")
+        tty.flush()
+        answer = tty.readline().strip()
+    if answer.isdigit() and 1 <= int(answer) <= len(options):
+        return options[int(answer) - 1][0]
+    return None
+
+
 def run(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="ask", description="Route a prompt to the right model.")
     parser.add_argument("prompt", nargs="*")
     parser.add_argument("-p", "--print", dest="one_shot", action="store_true", help="one-shot, non-interactive")
+    parser.add_argument("--ask", action="store_true", help="show the likeliest targets and let me pick")
     parser.add_argument("--to", help="skip routing: target name, short name (opus, sol) or model id")
     parser.add_argument("--via", choices=["claude", "codex"], help="keep the routed tier, use this vendor")
     parser.add_argument("--no-local", action="store_true", help="never answer with the local model")
@@ -84,28 +121,35 @@ def run(argv: list[str]) -> int:
         parser.error("no prompt given")
 
     cfg = config.load()
+    name = backend_name(cfg)
     cwd = os.getcwd()
     repo = state.repo_name(cwd)
-    engine, elapsed = None, None
+    engine, elapsed, picked = None, None, None
 
     if args.to:
         decision = policy.Decision(policy.resolve_to(cfg, args.to), "manual --to")
     else:
         engine = backend(cfg)
-        decision, elapsed = route(cfg, engine, prompt, repo)
+        decision, elapsed = route(cfg, engine, prompt, repo, name)
     routed = decision.target
+    ask_now = args.ask or (decision.unsure and cfg["router"].get("ask_when_unsure", False))
+    if ask_now and decision.answers and not args.dry:
+        print(describe(cfg, decision, elapsed, True), file=sys.stderr)
+        picked = pick(cfg, decision)
+        if picked:
+            decision.target, decision.reason = picked, "picked with --ask"
     if args.via:
         decision.target = policy.via(cfg, decision.target, args.via)
     # Laya only decides, so with that backend there is nothing local to answer with.
-    no_local = args.no_local or cfg["router"].get("backend", "semif") == "laya"
+    no_local = args.no_local or name == "laya"
     if no_local and cfg["targets"][decision.target]["vendor"] == "local":
         decision.target = policy.via(cfg, decision.target, "claude")
 
     print(describe(cfg, decision, elapsed, args.verbose or args.dry), file=sys.stderr)
     log.append({
-        "type": "decision", "prompt": prompt, "cwd": cwd, "repo": repo,
+        "type": "decision", "prompt": prompt, "cwd": cwd, "repo": repo, "backend": name,
         "answers": decision.answers, "routed": routed, "target": decision.target,
-        "reason": decision.reason, "via": args.via, "manual": bool(args.to),
+        "reason": decision.reason, "via": args.via, "manual": bool(args.to or picked),
         "one_shot": args.one_shot, "route_ms": elapsed and round(elapsed * 1000, 1),
     })
     if args.dry:
@@ -131,11 +175,20 @@ def cmd_serve(argv: list[str]) -> int:
     from .server import serve
 
     cfg = config.load()
-    engine = load_engine(cfg, cfg["router"].get("backend", "semif"))
+    engine = load_engine(cfg, backend_name(cfg))
     # Warm up: the first call at a new shape compiles kernels.
     engine.route(state.build("warm up", None, 100), cfg["questions"])
     serve(engine, cfg["router"]["port"])
     return 0
+
+
+def cmd_service(argv: list[str]) -> int:
+    from . import service
+
+    parser = argparse.ArgumentParser(prog="ask service")
+    parser.add_argument("action", choices=["install", "uninstall", "status"])
+    action = parser.parse_args(argv).action
+    return {"install": service.install, "uninstall": service.uninstall, "status": service.status}[action]()
 
 
 def cmd_rate(argv: list[str]) -> int:
@@ -156,19 +209,24 @@ def cmd_rate(argv: list[str]) -> int:
     return 0
 
 
+def _labelled(path: str) -> list[dict]:
+    return [json.loads(line) for line in open(path) if line.strip()]
+
+
 def cmd_eval(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="ask eval")
     parser.add_argument("file")
     parser.add_argument("--show-misses", action="store_true")
-    parser.add_argument("--backend", choices=["semif", "laya"], help="router to evaluate (default: config)")
+    parser.add_argument("--backend", choices=BACKENDS, help="router to evaluate (default: config)")
     args = parser.parse_args(argv)
     cfg = config.load()
-    engine = backend(cfg, args.backend)
-    rows = [json.loads(line) for line in open(args.file) if line.strip()]
+    name = backend_name(cfg, args.backend)
+    engine = backend(cfg, name)
+    rows = _labelled(args.file)
     hits = {q: 0 for q in cfg["questions"]}
     targets_hit, unsure, times, misses = 0, 0, [], []
     for row in rows:
-        decision, elapsed = route(cfg, engine, row["prompt"], row.get("repo"))
+        decision, elapsed = route(cfg, engine, row["prompt"], row.get("repo"), name)
         times.append(elapsed)
         expected = policy.decide(cfg, {q: {"choice": c, "p": 1.0} for q, c in row["expect"].items()})
         unsure += bool(decision.unsure)
@@ -182,7 +240,7 @@ def cmd_eval(argv: list[str]) -> int:
         if wrong or decision.target != expected.target:
             misses.append((row["prompt"], decision.target, expected.target, wrong))
     n = len(rows)
-    print(f"{n} prompts · router {engine.metadata['source'] if hasattr(engine, 'metadata') else cfg['router']['model']}")
+    print(f"{n} prompts · router {engine.metadata['source']}")
     for q, h in hits.items():
         print(f"  {q:<11} {h / n:6.1%}")
     print(f"  {'target':<11} {targets_hit / n:6.1%}   (same target as the labels would route to)")
@@ -195,19 +253,62 @@ def cmd_eval(argv: list[str]) -> int:
     return 0
 
 
+def cmd_calibrate(argv: list[str]) -> int:
+    from . import calibrate
+
+    parser = argparse.ArgumentParser(prog="ask calibrate")
+    parser.add_argument("file", help="labelled prompts, same format as ask eval")
+    parser.add_argument("--backend", choices=BACKENDS, help="router to calibrate (default: config)")
+    args = parser.parse_args(argv)
+    cfg = config.load()
+    name = backend_name(cfg, args.backend)
+    engine = backend(cfg, name)
+    rows = _labelled(args.file)
+    samples: dict[str, list] = {q: [] for q in cfg["questions"]}
+    for row in rows:
+        probs, _ = raw_route(cfg, engine, row["prompt"], row.get("repo"))
+        for q, truth in row["expect"].items():
+            samples[q].append((probs[q], truth))
+    print(f"{len(rows)} prompts · router {engine.metadata['source']}")
+    print(f"  {'question':<11} {'T':>6}  {'NLL before':>10} {'after':>6}  {'ECE before':>10} {'after':>6}")
+    fitted = {}
+    for q, s in samples.items():
+        t = calibrate.fit(s)
+        fitted[q] = t
+        edge = "  (at the grid edge: needs more labelled data)" if calibrate.at_edge(t) else ""
+        print(f"  {q:<11} {t:6.2f}  {calibrate.nll(s, 1.0):10.3f} {calibrate.nll(s, t):6.3f}"
+              f"  {calibrate.ece(s, 1.0):10.3f} {calibrate.ece(s, t):6.3f}{edge}")
+    print(f"\nAdd to your targets.yaml ({config.config_path()}):\n\ncalibration:\n  {name}:")
+    for q, t in fitted.items():
+        print(f"    {q}: {t}")
+    if len(rows) < 200:
+        print(f"\nOnly {len(rows)} labelled prompts: treat these temperatures as a rough start, "
+              "and re-fit once you have a few hundred.", file=sys.stderr)
+    return 0
+
+
 def cmd_targets(argv: list[str]) -> int:
     cfg = config.load()
-    print(f"config: {config.config_path()}")
+    print(f"config: {config.config_path()} · backend: {backend_name(cfg)}")
     for name, t in cfg["targets"].items():
         effort = f" effort={t['effort']}" if t.get("effort") else ""
         print(f"  {name:<16} {t['vendor']:<7} {t['tier']:<9} {t['model']}{effort}")
     return 0
 
 
+COMMANDS = {
+    "why": lambda a: run(["--dry", *a]),
+    "serve": cmd_serve,
+    "service": cmd_service,
+    "rate": cmd_rate,
+    "eval": cmd_eval,
+    "calibrate": cmd_calibrate,
+    "targets": cmd_targets,
+}
+
+
 def main() -> None:
     argv = sys.argv[1:]
-    commands = {"why": lambda a: run(["--dry", *a]), "serve": cmd_serve, "rate": cmd_rate,
-                "eval": cmd_eval, "targets": cmd_targets}
-    if argv and argv[0] in SUBCOMMANDS:
-        sys.exit(commands[argv[0]](argv[1:]))
+    if argv and argv[0] in COMMANDS:
+        sys.exit(COMMANDS[argv[0]](argv[1:]))
     sys.exit(run(argv))

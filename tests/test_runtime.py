@@ -1,0 +1,217 @@
+"""Server, CLI, hybrid, Laya mapping, calibration and service, all without a real model."""
+
+import io
+import json
+import plistlib
+import re
+import sys
+import threading
+import types
+
+import pytest
+
+from trivium import calibrate, cli, config, policy, server, service
+
+CFG = config.load(config.config_path())
+
+
+class FakeEngine:
+    """Answers from a fixed table keyed by a word in the prompt; generates a canned reply."""
+
+    load_seconds = 0.0
+
+    def __init__(self, answers=None, source="fake", can_generate=True):
+        self.answers = answers or {}
+        self.metadata = {"source": source}
+        self.can_generate = can_generate
+        self.calls = []
+
+    def route(self, state, questions):
+        self.calls.append(set(questions))
+        request = state["request"]
+        picked = next((v for k, v in self.answers.items() if k in request), {})
+        probs = {}
+        for q, spec in questions.items():
+            options = list(spec["options"])
+            choice = picked.get(q, options[0])
+            rest = (1 - 0.9) / (len(options) - 1)
+            probs[q] = {o: (0.9 if o == choice else rest) for o in options}
+        return probs, {"total_seconds": 0.001}
+
+    def generate(self, prompt, max_tokens=2048):
+        if not self.can_generate:
+            raise RuntimeError("cannot generate")
+        yield from ["local ", "answer"]
+
+
+QUICK = {"kind": "quick_answer", "difficulty": "trivial", "tools": "none"}
+CODE = {"kind": "code_change", "difficulty": "moderate", "tools": "workspace"}
+
+
+@pytest.fixture
+def running_server():
+    engine = FakeEngine({"409": QUICK})
+    httpd = server.make_server(engine, 0)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    yield engine, server.Remote(httpd.server_address[1])
+    httpd.shutdown()
+
+
+def test_remote_round_trip(running_server):
+    engine, remote = running_server
+    assert remote.alive() and remote.metadata["source"] == "fake"
+    probs, _ = remote.route({"request": "what is 409", "context": "x"}, CFG["questions"])
+    assert max(probs["kind"], key=probs["kind"].get) == "quick_answer"
+    assert "".join(remote.generate("hi")) == "local answer"
+
+
+def test_remote_generate_error_is_clean():
+    httpd = server.make_server(FakeEngine(can_generate=False), 0)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        with pytest.raises(RuntimeError, match="cannot generate"):
+            "".join(server.Remote(httpd.server_address[1]).generate("hi"))
+    finally:
+        httpd.shutdown()
+
+
+@pytest.fixture
+def fake_cli(monkeypatch, tmp_path):
+    engine = FakeEngine({"409": QUICK, "retry": CODE})
+    monkeypatch.setattr(cli, "backend", lambda cfg, name=None: engine)
+    monkeypatch.setattr(cli.log, "LOG", tmp_path / "decisions.jsonl")
+    monkeypatch.setattr(cli.state, "repo_name", lambda cwd: "demo")
+    return engine, tmp_path / "decisions.jsonl"
+
+
+def test_why_logs_decision(fake_cli, capsys):
+    _, log_file = fake_cli
+    assert cli.run(["--dry", "add retry to the client"]) == 0
+    assert "codex-sol" in capsys.readouterr().err
+    record = json.loads(log_file.read_text().splitlines()[-1])
+    assert record["target"] == "codex-sol" and record["backend"] == "semif"
+
+
+def test_local_answer_streams(fake_cli, capsys):
+    assert cli.run(["-p", "what does 409 mean"]) == 0
+    assert capsys.readouterr().out.strip() == "local answer"
+
+
+def test_launch_uses_execvp(fake_cli, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(cli.os, "execvp", lambda f, argv: seen.update(argv=argv))
+    cli.run(["-p", "add retry to the client"])
+    assert seen["argv"][:4] == ["codex", "exec", "-m", "gpt-6-sol"]
+
+
+def test_rate_appends_feedback(fake_cli):
+    _, log_file = fake_cli
+    cli.run(["--dry", "add retry"])
+    assert cli.cmd_rate(["bad", "--should", "opus"]) == 0
+    feedback = json.loads(log_file.read_text().splitlines()[-1])
+    assert feedback["type"] == "feedback" and feedback["should"] == "claude-opus"
+
+
+def test_eval_reports_accuracy(fake_cli, tmp_path, capsys):
+    rows = [{"prompt": "what does 409 mean", "repo": None, "expect": QUICK},
+            {"prompt": "add retry", "repo": "demo", "expect": CODE}]
+    f = tmp_path / "eval.jsonl"
+    f.write_text("\n".join(json.dumps(r) for r in rows))
+    assert cli.cmd_eval([str(f)]) == 0
+    assert re.search(r"target\s+100.0%", capsys.readouterr().out)
+
+
+def test_calibrate_prints_block(fake_cli, tmp_path, capsys):
+    rows = [{"prompt": "what does 409 mean", "repo": None, "expect": QUICK}] * 3
+    f = tmp_path / "eval.jsonl"
+    f.write_text("\n".join(json.dumps(r) for r in rows))
+    assert cli.cmd_calibrate([str(f)]) == 0
+    out = capsys.readouterr().out
+    assert "calibration:\n  semif:" in out and "    kind:" in out
+
+
+def test_hybrid_splits_questions():
+    from trivium.hybrid import HybridEngine
+
+    semif, laya = FakeEngine(source="s"), FakeEngine({"x": {"tools": "workspace"}}, source="l")
+    engine = HybridEngine({"hybrid_laya": ["tools"]}, semif=semif, laya=laya)
+    probs, _ = engine.route({"request": "x"}, CFG["questions"])
+    assert semif.calls == [{"kind", "difficulty"}] and laya.calls == [{"tools"}]
+    assert list(probs) == list(CFG["questions"])
+    assert max(probs["tools"], key=probs["tools"].get) == "workspace"
+
+
+def test_laya_engine_maps_questions(monkeypatch):
+    seen = {}
+
+    class Agent:
+        def predict(self, state, questions):
+            seen.update(questions)
+            return {"answers": {q: {"probabilities": {o: 1 / len(v["criteria"]) for o in v["criteria"]}}
+                                for q, v in questions.items()}}
+
+    monkeypatch.setitem(sys.modules, "laya", types.SimpleNamespace(load=lambda *a, **k: Agent()))
+    from trivium.laya_engine import LayaEngine
+
+    probs, _ = LayaEngine({}).route({"request": "x"}, CFG["questions"])
+    assert seen["kind"]["type"] == "choice" and seen["kind"]["criteria"] == CFG["questions"]["kind"]["options"]
+    assert set(probs["tools"]) == {"none", "workspace"}
+
+
+def test_temper_and_fit():
+    sharp = [({"a": 0.99, "b": 0.01}, "a")] * 5 + [({"a": 0.99, "b": 0.01}, "b")] * 5
+    t = calibrate.fit(sharp)
+    assert t > 1.0  # over-confident scores get softened
+    assert calibrate.ece(sharp, t) < calibrate.ece(sharp, 1.0)
+    assert policy.temper({"a": 0.5, "b": 0.5}, 3.0) == pytest.approx({"a": 0.5, "b": 0.5})
+
+
+def test_summarize_applies_temperature():
+    raw = {"kind": {"quick_answer": 0.9, "code_change": 0.1}}
+    assert policy.summarize(raw, {"kind": 5.0})["kind"]["p"] < 0.9
+
+
+def test_alternatives_rank_targets():
+    answers = {
+        "kind": {"probabilities": {"code_change": 0.6, "debugging": 0.4}},
+        "difficulty": {"probabilities": {"moderate": 0.7, "hard": 0.3}},
+        "tools": {"probabilities": {"workspace": 1.0, "none": 0.0}},
+    }
+    ranked = policy.alternatives(CFG, answers)
+    assert ranked[0][0] == "codex-sol"
+    assert sum(p for _, p in ranked) == pytest.approx(1.0)
+    assert dict(ranked)["claude-opus"] == pytest.approx(0.4 * 0.3)
+
+
+def test_service_plist(monkeypatch):
+    monkeypatch.setattr(service.shutil, "which", lambda name: "/usr/local/bin/ask")
+    body = plistlib.loads(service.plist())
+    assert body["ProgramArguments"] == ["/usr/local/bin/ask", "serve"]
+    assert body["KeepAlive"] == {"SuccessfulExit": False}
+    assert body["EnvironmentVariables"]["HF_HUB_OFFLINE"] == "1"
+
+
+def test_config_rejects_bad_calibration():
+    with pytest.raises(ValueError, match="calibration"):
+        config.validate({**CFG, "calibration": {"semif": {"kind": -1}}})
+    with pytest.raises(ValueError, match="backend"):
+        config.validate({**CFG, "router": {**CFG["router"], "backend": "gpt"}})
+
+
+class Tty(io.StringIO):
+    def __init__(self, answer):
+        super().__init__()
+        self.answer = answer
+
+    def readline(self):
+        return self.answer
+
+
+def test_pick_offers_likeliest_targets():
+    answers = policy.summarize({"kind": {"code_change": 0.6, "debugging": 0.4},
+                                "difficulty": {"moderate": 0.7, "hard": 0.3},
+                                "tools": {"workspace": 1.0, "none": 0.0}})
+    decision = policy.decide(CFG, answers)
+    assert cli.pick(CFG, decision, Tty("2\n")) == policy.alternatives(CFG, answers)[1][0]
+    assert cli.pick(CFG, decision, Tty("\n")) is None

@@ -84,7 +84,13 @@ ask serve                  # keep the router warm; the first run downloads Qwen3
 ```
 
 `ask` works without `ask serve`, but then it loads the model for every prompt, which takes several
-seconds.
+seconds. To start the server at every login instead of by hand:
+
+```sh
+ask service install        # a launchd agent that runs `ask serve`; logs to ~/Library/Logs/trivium.log
+ask service status
+ask service uninstall
+```
 
 ## Usage
 
@@ -92,11 +98,17 @@ seconds.
 ask "fix the flaky test in tests/test_auth.py"   # route, then open an interactive session
 ask -p "regex for a semver string"               # one-shot: print the answer and exit
 ask why "plan the billing architecture"          # show the decision and probabilities only
+ask --ask "refactor the auth module"             # show the likeliest targets and pick one
 ask --to opus "..."                              # skip the router: target, short name or model id
 ask --via codex "..."                            # keep the routed tier, use the other vendor
 ask --no-local "..."                             # never answer with the local model
 ask targets                                      # list targets and the config file in use
 ```
+
+`--ask` shows the three likeliest targets with their probability, computed by routing the top
+two answers of every question through the rules, and lets you pick one or keep the router's choice.
+Set `router.ask_when_unsure: true` to get that prompt automatically whenever the router is unsure,
+instead of the fallback.
 
 `--via` keeps the strength and swaps the vendor: a route to Claude Opus becomes Codex gpt-6-astra, and a
 route to Codex gpt-6-sol becomes Claude Sonnet.
@@ -140,10 +152,45 @@ same rules, confidence thresholds off, on an Apple M5 Pro (full write-up in
 | semif + Qwen3.5-4B, MLX bf16 (default) | **94.4%** | **80.6%** | 80.6% | **80.6%** | 241 ms |
 | Laya 0.3.7, English checkpoint | 69.4% | 47.2% | 97.2% | 38.9% | **98 ms** |
 | Laya 0.3.7, typed-decisions checkpoint | 80.6% | 47.2% | **100%** | 47.2% | 99 ms |
+| Hybrid: Laya for tools, semif for the rest | **94.4%** | **80.6%** | 97.2% | **83.3%** | 263 ms |
 
 "Right target" means the router's answers lead to the same target as the hand labels would. These are
 small-sample numbers, and the questions were tuned on the same set with semif, which favours semif.
 Replace the file with your own prompts before trusting any threshold.
+
+### Backends
+
+`router.backend` picks who answers the questions:
+
+- `semif` (default): Qwen3.5-4B answers all three and also answers local prompts.
+- `laya`: the Laya encoder answers all three. Faster, decides only, so local targets go to Claude.
+- `hybrid`: Laya answers the questions listed in `router.hybrid_laya` (default `[tools]`), semif the
+  rest. The best result on the bundled set, at the cost of a second model in memory.
+
+`laya` and `hybrid` need `uv sync --extra laya`.
+
+### Calibration
+
+Router scores are not probabilities until you calibrate them. `ask calibrate` fits one temperature
+per question on labelled prompts and prints a block for your config:
+
+```sh
+ask calibrate evals/prompts.jsonl --backend hybrid
+```
+
+```yaml
+calibration:
+  hybrid:
+    kind: 0.6
+    difficulty: 1.35
+    tools: 0.25   # flagged: at the grid edge, needs more labelled data
+```
+
+Two lessons from the bundled set. First, fit on a few hundred labels, not 36: on this set Laya's
+tools answers are nearly always right yet reported at 0.5 to 0.7, so the fit runs to the edge of
+the allowed range. Second, re-choose `min_confidence` after calibrating. Temperatures change the
+scale the thresholds are read on: applying semif's fitted temperatures with thresholds tuned on raw
+scores sent more prompts to the fallback and lowered the right-target rate from 80.6% to 75.0%.
 
 ### Laya backend
 
@@ -162,6 +209,7 @@ Laya only decides, so with this backend local targets are routed to Claude inste
 ## Status and limits
 
 - Early. It works end to end on the author's machine; interfaces and defaults will change.
+- Calibration and thresholds are fitted on 36 hand-written prompts; nothing ships pre-calibrated.
 - Apple Silicon only for the default backend. semif also has PyTorch (CUDA) and llama.cpp backends
   that Trivium does not wire up yet.
 - Routing happens once per task, not per turn. Once a session is open you stay in that tool.

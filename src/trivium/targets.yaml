@@ -5,7 +5,11 @@
 # confident than `min_confidence`, the `fallback` target is used instead.
 
 router:
-  backend: semif        # semif (Qwen, can also answer locally) or laya (needs `uv sync --extra laya`)
+  # semif: Qwen decides and can answer locally. laya: faster, decides only (`uv sync --extra laya`).
+  # hybrid: Laya answers the questions in hybrid_laya, semif the rest (needs the laya extra).
+  backend: semif
+  hybrid_laya: [tools]
+  ask_when_unsure: false  # true: when the router is unsure, offer the likeliest targets instead of the fallback
   model: Qwen/Qwen3.5-4B
   revision: 851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a   # semif requires a pinned commit
   bits: null            # null = bf16 (~8 GB RAM, semif-validated); 8 or 4 = in-memory quantisation
@@ -37,6 +41,9 @@ questions:
     options:
       none: no, it can be answered from general knowledge alone
       workspace: yes, it needs to read or change files or run commands
+
+# Per-backend temperatures from `ask calibrate`: p ** (1/T), renormalised. Empty = raw scores.
+calibration: {}
 
 min_confidence:
   kind: 0.45

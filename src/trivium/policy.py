@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass, field
 
 # Order used when `--via` has no same-tier target at the requested vendor.
@@ -16,10 +17,21 @@ class Decision:
     unsure: list = field(default_factory=list)
 
 
-def summarize(results: dict) -> dict:
-    """{qid: {option: p}} -> {qid: {"choice", "p", "probabilities"}}."""
+def temper(probs: dict, temperature: float) -> dict:
+    """Rescale a distribution as p ** (1 / T), renormalised. T > 1 softens, T < 1 sharpens."""
+    if temperature == 1.0:
+        return dict(probs)
+    powered = {o: max(p, 1e-12) ** (1.0 / temperature) for o, p in probs.items()}
+    total = sum(powered.values())
+    return {o: v / total for o, v in powered.items()}
+
+
+def summarize(results: dict, temperatures: dict | None = None) -> dict:
+    """{qid: {option: p}} -> {qid: {"choice", "p", "probabilities"}}, after optional calibration."""
+    temperatures = temperatures or {}
     out = {}
-    for qid, probs in results.items():
+    for qid, raw in results.items():
+        probs = temper(raw, temperatures.get(qid, 1.0))
         choice = max(probs, key=probs.get)
         out[qid] = {"choice": choice, "p": probs[choice], "probabilities": probs}
     return out
@@ -43,6 +55,27 @@ def decide(cfg: dict, answers: dict) -> Decision:
         if _matches(rule["when"], answers):
             return Decision(rule["to"], f"rule {i + 1}: {rule['when']}", answers)
     return Decision(cfg["default"], "no rule matched", answers)
+
+
+def alternatives(cfg: dict, answers: dict, top: int = 2) -> list[tuple[str, float]]:
+    """Probability of each target, treating the questions as independent.
+
+    Enumerates the `top` most likely options per question, routes every combination through
+    the rules (thresholds ignored), and sums the joint probability per target, most likely first.
+    """
+    per_question = []
+    for qid, a in answers.items():
+        ranked = sorted(a["probabilities"].items(), key=lambda kv: -kv[1])[:top]
+        per_question.append([(qid, option, p) for option, p in ranked])
+    totals: dict[str, float] = {}
+    for combo in itertools.product(*per_question):
+        joint = {qid: {"choice": option, "p": 1.0} for qid, option, _ in combo}
+        weight = 1.0
+        for _, _, p in combo:
+            weight *= p
+        target = decide({**cfg, "min_confidence": {}}, joint).target
+        totals[target] = totals.get(target, 0.0) + weight
+    return sorted(totals.items(), key=lambda kv: -kv[1])
 
 
 def via(cfg: dict, target: str, vendor: str) -> str:

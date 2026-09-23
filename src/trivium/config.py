@@ -10,6 +10,7 @@ import yaml
 
 USER_CONFIG = Path.home() / ".config" / "trivium" / "targets.yaml"
 VENDORS = {"local", "claude", "codex"}
+BACKENDS = ["semif", "laya", "hybrid"]
 
 
 def config_path() -> Path:
@@ -26,8 +27,24 @@ def load(path: Path | None = None) -> dict:
     return cfg
 
 
+def temperatures(cfg: dict, backend: str) -> dict:
+    """Per-question temperatures fitted by `ask calibrate` for this backend; empty means raw."""
+    return (cfg.get("calibration") or {}).get(backend) or {}
+
+
 def validate(cfg: dict) -> None:
     questions, targets = cfg["questions"], cfg["targets"]
+    if cfg["router"].get("backend", "semif") not in BACKENDS:
+        raise ValueError(f"router.backend must be one of {BACKENDS}")
+    for q in cfg["router"].get("hybrid_laya", []):
+        if q not in questions:
+            raise ValueError(f"router.hybrid_laya: unknown question {q!r}")
+    for backend, temps in (cfg.get("calibration") or {}).items():
+        if backend not in BACKENDS:
+            raise ValueError(f"calibration: unknown backend {backend!r}")
+        for q, t in (temps or {}).items():
+            if q not in questions or not (isinstance(t, (int, float)) and t > 0):
+                raise ValueError(f"calibration.{backend}.{q}: needs a known question and a positive number")
     for qid, q in questions.items():
         if not 2 <= len(q["options"]) <= 16:
             raise ValueError(f"question {qid}: needs 2-16 options (semif limit)")
