@@ -8,7 +8,7 @@ import time
 
 class Engine:
     def __init__(self, router_cfg: dict):
-        from semif_phase1 import mlx_backend
+        from ._semif import mlx_backend
 
         self._semif = mlx_backend
         started = time.perf_counter()

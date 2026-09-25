@@ -16,8 +16,13 @@ class LayaEngine:
             raise RuntimeError("Install the Laya extra: uv sync --extra laya") from error
 
         started = time.perf_counter()
-        self.agent = laya.load(router_cfg.get("laya_model", "convaiinnovations/laya"),
-                               subfolder=router_cfg.get("laya_subfolder"))
+        source = router_cfg.get("laya_model", "convaiinnovations/laya")
+        if revision := router_cfg.get("laya_revision"):
+            # laya.load has no revision argument, so pin the weights by loading a pinned local snapshot.
+            from huggingface_hub import snapshot_download
+
+            source = snapshot_download(source, revision=revision)
+        self.agent = laya.load(source, subfolder=router_cfg.get("laya_subfolder"))
         self.load_seconds = time.perf_counter() - started
         self.metadata = {"source": f"laya:{router_cfg.get('laya_subfolder') or 'english'}"}
         self.max_request_chars = router_cfg.get("laya_max_request_chars", 300)

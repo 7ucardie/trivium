@@ -80,7 +80,7 @@ Every model name, rule, question and threshold lives in `targets.yaml`. A new mo
 
 ```sh
 git clone https://github.com/7ucardie/trivium && cd trivium
-uv sync                    # MLX, semif (which also pins torch and transformers)
+uv sync                    # MLX and the vendored semif readout; no PyTorch needed
 uv tool install -e .       # puts `ask` (and `trivium`) on your PATH
 ask serve                  # keep the router warm; the first run downloads Qwen3.5-4B (~9 GB)
 ```
@@ -264,11 +264,12 @@ Laya only decides, so with this backend local targets are routed to Claude inste
 
 Trivium is released under the [MIT License](LICENSE). It builds on:
 
-- [semif](https://github.com/theoleecj/semif) (MIT) for option-logit scoring
+- [semif](https://github.com/theoleecj/semif) (MIT) for option-logit scoring, vendored unchanged in
+  `src/trivium/_semif` at commit 1f2dea3 with its license, because PyPI does not allow git dependencies
 - [Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B) (Apache 2.0), downloaded at run time, not
   redistributed
 - [MLX](https://github.com/ml-explore/mlx) and [mlx-lm](https://github.com/ml-explore/mlx-lm) (MIT)
-- [Laya](https://huggingface.co/convaiinnovations/laya) (Apache 2.0), optional
+- [Laya](https://huggingface.co/convaiinnovations/laya) (Apache 2.0), optional; weights pinned by revision
 
 Claude, Claude Code, Codex and the model names are trademarks of their owners. Trivium is an
 independent project and is not affiliated with Anthropic or OpenAI.
