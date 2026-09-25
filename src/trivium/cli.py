@@ -178,14 +178,15 @@ def run(argv: list[str]) -> int:
         return 0
 
     target = cfg["targets"][decision.target]
-    if target["vendor"] == "local":
-        engine = engine or backend(cfg)
-        for text in engine.generate(prompt):
-            sys.stdout.write(text)
-            sys.stdout.flush()
-        sys.stdout.write("\n")
-        return 0
-    cmd = launch.argv(target, prompt, one_shot=args.one_shot)
+    if target["vendor"] == "local" or args.one_shot:
+        # One-shot answers stream through the CLIs' JSON events, so a model that thinks for a while
+        # shows what it is doing instead of printing nothing until it is done.
+        from . import repl, session
+
+        router = session.Router(cfg=cfg, engine=engine)
+        got = repl.print_events(router.one_shot(decision.target, prompt, cwd))
+        return 0 if got else 1
+    cmd = launch.argv(target, prompt, one_shot=False)
     try:
         os.execvp(cmd[0], cmd)
     except FileNotFoundError:

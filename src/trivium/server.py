@@ -82,13 +82,13 @@ def make_server(engine, port: int, backend: str = "semif", cfg: dict | None = No
                 return False
             return True
 
-        def _stream(self, chunks) -> None:
+        def _stream(self, chunks, content_type: str = "text/plain; charset=utf-8") -> None:
             # Start the generator before the headers, so a backend that cannot answer (Laya,
             # llama.cpp) gives a clean 400 instead of a broken stream.
             chunks = iter(chunks)
             first = next(chunks, "")
             self.send_response(200)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Type", content_type)
             self.send_header("Cache-Control", "no-store")
             self._cors()
             self.end_headers()
@@ -185,7 +185,10 @@ def make_server(engine, port: int, backend: str = "semif", cfg: dict | None = No
                         script = router.open_in_terminal(target, d["prompt"], d["cwd"])
                         return self._json(200, {"opened": True, "target": target, "script": str(script)})
                     count("generates")
-                    return self._stream(router.one_shot(target, d["prompt"], d["cwd"]))
+                    # One JSON object per line: {"kind": "text" | "status" | "error", "text": ...}
+                    events = (json.dumps({"kind": k, "text": t}) + "\n"
+                              for k, t in router.one_shot(target, d["prompt"], d["cwd"]))
+                    return self._stream(events, "application/x-ndjson")
                 self._json(404, {"error": "not found"})
             except PermissionError as error:
                 self._json(415, {"error": str(error)})

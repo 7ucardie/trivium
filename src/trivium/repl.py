@@ -75,6 +75,36 @@ def run_interactive(cmd: list[str], cwd: str) -> int:
         return 130
 
 
+def print_events(events, write=None) -> bool:
+    """Print (kind, text) events: answer text as it arrives, status on one updating line, errors in
+    colour. Returns whether any answer text arrived."""
+    import time
+
+    write = write or sys.stdout.write
+    tty = sys.stdout.isatty()
+    started, got_text, status_shown = time.monotonic(), False, False
+    for kind, text in events:
+        if kind == "status":
+            if got_text:
+                continue
+            line = dim(f"  … {text} ({time.monotonic() - started:.0f}s)")
+            write(("\r\033[K" if tty and status_shown else ("" if not status_shown else "\n")) + line)
+            status_shown = True
+        elif kind == "text":
+            if not got_text and status_shown:
+                write("\r\033[K" if tty else "\n")
+            got_text = True
+            write(text)
+        elif kind == "error":
+            write(("\n" if got_text or status_shown else "") + warn(f"  {text}") + "\n")
+        sys.stdout.flush()
+    if status_shown and not got_text:
+        write("\n")
+    if got_text:
+        write("\n")
+    return got_text
+
+
 class App:
     def __init__(self, router: session.Router, cwd: str, key=read_key, line=read_line, run=run_interactive,
                  out=print):
@@ -170,10 +200,7 @@ class App:
     def execute(self, d: dict, target: str, one_shot: bool) -> None:
         cmd = self.router.command(target, d["prompt"], one_shot=False)
         if cmd is None or one_shot:
-            for chunk in self.router.one_shot(target, d["prompt"], self.cwd):
-                sys.stdout.write(chunk)
-                sys.stdout.flush()
-            self.out("")
+            print_events(self.router.one_shot(target, d["prompt"], self.cwd))
             return
         self.out(dim(f"  $ {' '.join(cmd[:3])} …  (exit it to come back to trivium)"))
         code = self.run(cmd, self.cwd)

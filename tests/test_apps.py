@@ -125,7 +125,7 @@ from trivium import security, server
 def api(router, tmp_path, monkeypatch):
     monkeypatch.setenv("TRIVIUM_TOKEN_FILE", str(tmp_path / "api-token"))
     opened = []
-    monkeypatch.setattr(session.subprocess, "run", lambda cmd, check=False: opened.append(cmd))
+    monkeypatch.setattr(session.subprocess, "run", lambda cmd, check=False: opened.append(cmd))  # no real `open`
     httpd = server.make_server(router.engine, 0, backend="semif", cfg=CFG)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{httpd.server_address[1]}"
@@ -164,7 +164,9 @@ def test_api_one_shot_streams_local_answer(api):
     call, _, tmp_path = api
     _, d = call("/api/decide", {"prompt": "what does 409 mean", "cwd": str(tmp_path)})
     code, text = call("/api/run", {"id": d["id"], "mode": "oneshot"})
-    assert code == 200 and text == "local answer"
+    events = [json.loads(line) for line in text.splitlines()]
+    assert code == 200 and events[0]["kind"] == "status"
+    assert "".join(e["text"] for e in events if e["kind"] == "text") == "local answer"
 
 
 def test_api_guards(api):

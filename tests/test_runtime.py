@@ -2,6 +2,7 @@
 
 import io
 import json
+import pathlib
 import plistlib
 import re
 import sys
@@ -95,14 +96,26 @@ def test_why_logs_decision(fake_cli, capsys):
 
 def test_local_answer_streams(fake_cli, capsys):
     assert cli.run(["-p", "what does 409 mean"]) == 0
-    assert capsys.readouterr().out.strip() == "local answer"
+    assert "local answer" in capsys.readouterr().out
 
 
-def test_launch_uses_execvp(fake_cli, monkeypatch):
+def test_interactive_launch_uses_execvp(fake_cli, monkeypatch):
     seen = {}
     monkeypatch.setattr(cli.os, "execvp", lambda f, argv: seen.update(argv=argv))
-    cli.run(["-p", "add retry to the client"])
-    assert seen["argv"][:4] == ["codex", "exec", "-m", "gpt-6-sol"]
+    cli.run(["add retry to the client"])
+    assert seen["argv"][:3] == ["codex", "-m", "gpt-6-sol"]
+
+
+def test_one_shot_streams_codex_events(fake_cli, monkeypatch, capsys):
+    from conftest import FakeProc
+    from trivium import session
+
+    fixture = (pathlib.Path(__file__).parent / "fixtures" / "codex-stream.jsonl").read_text().splitlines(True)
+    seen = {}
+    monkeypatch.setattr(session.subprocess, "Popen", lambda cmd, **kw: seen.update(cmd=cmd) or FakeProc(fixture))
+    assert cli.run(["-p", "add retry to the client"]) == 0
+    assert seen["cmd"][:4] == ["codex", "exec", "--json", "-m"]
+    assert "1\n2\n3\n4\n5" in capsys.readouterr().out
 
 
 def test_rate_appends_feedback(fake_cli):

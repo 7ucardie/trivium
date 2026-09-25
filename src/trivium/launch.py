@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 
-def argv(target: dict, prompt: str, *, one_shot: bool) -> list[str]:
+def argv(target: dict, prompt: str, *, one_shot: bool, stream: bool = False) -> list[str]:
+    """stream=True (one-shot only) asks for the CLIs' JSON event streams; see stream.py."""
+    from .stream import claude_flags
+
     vendor, model, effort = target["vendor"], target["model"], target.get("effort")
     if vendor == "claude":
         cmd = ["claude", "--model", model]
@@ -11,9 +14,13 @@ def argv(target: dict, prompt: str, *, one_shot: bool) -> list[str]:
             cmd += ["--effort", effort]
         if one_shot:
             cmd.append("-p")
+            if stream:
+                cmd += claude_flags()
         return cmd + [prompt]
     if vendor == "codex":
         cmd = ["codex", "exec"] if one_shot else ["codex"]
+        if one_shot and stream:
+            cmd.append("--json")
         cmd += ["-m", model]
         if effort:
             cmd += ["-c", f'model_reasoning_effort="{effort}"']

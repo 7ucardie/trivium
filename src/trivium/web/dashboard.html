@@ -104,6 +104,7 @@ td.num { text-align:right; font-variant-numeric:tabular-nums; }
       <button id="oneshot">One-shot answer here</button>
       <span class="hint" id="run-hint"></span>
     </div>
+    <div class="hint" id="run-status" aria-live="polite"></div>
     <pre class="out" id="out" hidden></pre>
     <div class="row rate" id="rate" hidden style="margin-top:10px">
       <span class="dim">Right model?</span>
@@ -271,27 +272,55 @@ async function choose(name) {
 async function run(mode) {
   $("run-error").textContent = "";
   const body = { id: current.id, target: chosen, mode };
-  try {
-    if (mode === "terminal") {
+  if (mode === "terminal") {
+    try {
       await api("/api/run", body);
       $("run-hint").textContent = "opened in a Terminal window";
-    } else {
-      const out = $("out");
-      out.hidden = false; out.textContent = "";
-      $("oneshot").disabled = true;
-      const r = await api("/api/run", body);
-      const reader = r.body.getReader(), dec = new TextDecoder();
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        out.textContent += dec.decode(value, { stream: true });
-        out.scrollTop = out.scrollHeight;
+      $("rate").hidden = false;
+    } catch (e) { $("run-error").textContent = e.message; }
+    return;
+  }
+  // One-shot: the server sends one JSON event per line. Claude streams its answer; Codex reports its
+  // steps and sends the answer when done. Either way, show that it is working until text arrives.
+  const out = $("out"), status = $("run-status");
+  out.hidden = true; out.textContent = "";
+  $("oneshot").disabled = true;
+  const started = Date.now();
+  let step = "starting", gotText = false, failed = false;
+  const tick = () => {
+    const s = Math.round((Date.now() - started) / 1000);
+    status.textContent = gotText ? "" : `working · ${step} · ${s}s`;
+  };
+  tick();
+  const timer = setInterval(tick, 1000);
+  const handle = (ev) => {
+    if (ev.kind === "status") { step = ev.text; tick(); }
+    else if (ev.kind === "text") { gotText = true; out.hidden = false; out.textContent += ev.text; out.scrollTop = out.scrollHeight; tick(); }
+    else if (ev.kind === "error") { failed = true; $("run-error").textContent = ev.text; }
+  };
+  try {
+    const r = await api("/api/run", body);
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (line) handle(JSON.parse(line));
       }
     }
-    $("rate").hidden = false;
+    if (buf.trim()) handle(JSON.parse(buf));
+    const secs = Math.round((Date.now() - started) / 1000);
+    status.textContent = gotText ? `answered in ${secs}s` : (failed ? "" : `no answer after ${secs}s`);
+    $("rate").hidden = !gotText;
   } catch (e) {
     $("run-error").textContent = e.message;
   } finally {
+    clearInterval(timer);
     $("oneshot").disabled = false;
   }
 }

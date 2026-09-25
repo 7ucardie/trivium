@@ -13,7 +13,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import cli, config, launch, log, policy, state, status
+from . import cli, config, launch, log, policy, state, status, stream
 
 LAUNCH_DIR = log.LOG.parent / "launch"
 
@@ -88,18 +88,29 @@ class Router:
         return None if info["vendor"] == "local" else launch.argv(info, prompt, one_shot=one_shot)
 
     def one_shot(self, target: str, prompt: str, cwd: str):
-        """Yield the answer as text chunks: from the local model, `claude -p` or `codex exec`."""
-        cmd = self.command(target, prompt, one_shot=True)
-        if cmd is None:
-            yield from self.engine.generate(prompt)
+        """Yield (kind, text) events for a one-shot answer: "text", "status" or "error" (see stream.py)."""
+        info = self.cfg["targets"][target]
+        if info["vendor"] == "local":
+            yield "status", "answering with the local model"
+            for chunk in self.engine.generate(prompt):
+                yield "text", chunk
             return
-        with subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                              stderr=subprocess.STDOUT, text=True, bufsize=1) as proc:
-            for line in proc.stdout:
-                yield line
-            code = proc.wait()
-        if code:
-            yield f"\n[{cmd[0]} exited with {code}]\n"
+        cmd = launch.argv(info, prompt, one_shot=True, stream=True)
+        parse = stream.claude_events if info["vendor"] == "claude" else stream.codex_events
+        yield "status", f"starting {cmd[0]} ({info['model']})"
+        errored = False
+        try:
+            with subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                  stderr=subprocess.STDOUT, text=True, bufsize=1) as proc:
+                for kind, text in parse(proc.stdout):
+                    errored = errored or kind == "error"
+                    yield kind, text
+                code = proc.wait()
+        except FileNotFoundError:
+            yield "error", f"`{cmd[0]}` is not on PATH"
+            return
+        if code and not errored:
+            yield "error", f"{cmd[0]} exited with code {code}"
 
     def open_in_terminal(self, target: str, prompt: str, cwd: str) -> Path:
         """Open a new terminal window running the interactive CLI for this target in cwd (macOS)."""
