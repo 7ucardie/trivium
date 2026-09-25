@@ -148,8 +148,8 @@ def run(argv: list[str]) -> int:
             decision.target, decision.reason = picked, "picked with --ask"
     if args.via:
         decision.target = policy.via(cfg, decision.target, args.via)
-    # Laya only decides, so with that backend there is nothing local to answer with.
-    no_local = args.no_local or name == "laya"
+    # Laya and the llama.cpp runtime only decide, so there is nothing local to answer with.
+    no_local = args.no_local or not config.answers_locally(cfg)
     if no_local and cfg["targets"][decision.target]["vendor"] == "local":
         decision.target = policy.via(cfg, decision.target, "claude")
 
@@ -375,7 +375,8 @@ def cmd_export(argv: list[str]) -> int:
 
 def cmd_targets(argv: list[str]) -> int:
     cfg = config.load()
-    print(f"config: {config.config_path()} · backend: {backend_name(cfg)}")
+    print(f"config: {config.config_path()} · backend: {backend_name(cfg)} · "
+          f"runtime: {cfg['router'].get('runtime', 'mlx')}")
     for name, t in cfg["targets"].items():
         effort = f" effort={t['effort']}" if t.get("effort") else ""
         print(f"  {name:<16} {t['vendor']:<7} {t['tier']:<9} {t['model']}{effort}")

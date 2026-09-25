@@ -351,3 +351,24 @@ def test_sweep_trades_fallback_for_precision():
     # the confident one (0.95) still routes, and routes right.
     assert rows[0.6] == (0.5, 0.5, 1.0)
     assert rows[0.9] == (0.5, 0.5, 1.0)
+
+
+# --- runtimes -------------------------------------------------------------------
+
+def test_runtime_config():
+    from trivium import engine
+
+    with pytest.raises(ValueError, match="runtime"):
+        config.validate({**CFG, "router": {**CFG["router"], "runtime": "tpu"}})
+    assert config.answers_locally(CFG)
+    assert not config.answers_locally({**CFG, "router": {**CFG["router"], "runtime": "llamacpp"}})
+    assert not config.answers_locally({**CFG, "router": {**CFG["router"], "backend": "laya"}})
+    assert engine.gguf_path({"gguf": "/models/q.gguf"}) == "/models/q.gguf"
+    with pytest.raises(ValueError, match="gguf"):
+        engine.gguf_path({})
+
+
+def test_llamacpp_runtime_routes_local_to_claude(fake_cli, monkeypatch, capsys):
+    monkeypatch.setattr(cli.config, "answers_locally", lambda cfg: False)
+    assert cli.run(["--dry", "what does 409 mean"]) == 0
+    assert "claude-haiku" in capsys.readouterr().err

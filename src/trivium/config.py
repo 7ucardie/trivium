@@ -11,6 +11,13 @@ import yaml
 USER_CONFIG = Path.home() / ".config" / "trivium" / "targets.yaml"
 VENDORS = {"local", "claude", "codex"}
 BACKENDS = ["semif", "laya", "hybrid"]
+RUNTIMES = ["mlx", "torch", "llamacpp"]
+
+
+def answers_locally(cfg: dict) -> bool:
+    """Whether local targets can be answered: Laya only decides, and so does the llama.cpp runtime."""
+    router = cfg["router"]
+    return router.get("backend", "semif") != "laya" and router.get("runtime", "mlx") != "llamacpp"
 
 
 def config_path() -> Path:
@@ -58,6 +65,8 @@ def validate(cfg: dict) -> None:
     questions, targets = cfg["questions"], cfg["targets"]
     if cfg["router"].get("backend", "semif") not in BACKENDS:
         raise ValueError(f"router.backend must be one of {BACKENDS}")
+    if cfg["router"].get("runtime", "mlx") not in RUNTIMES:
+        raise ValueError(f"router.runtime must be one of {RUNTIMES}")
     for q in cfg["router"].get("hybrid_laya", []):
         if q not in questions:
             raise ValueError(f"router.hybrid_laya: unknown question {q!r}")

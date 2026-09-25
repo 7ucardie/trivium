@@ -70,8 +70,10 @@ Every model name, rule, question and threshold lives in `targets.yaml`. A new mo
 
 ## Requirements
 
-- macOS on Apple Silicon (the router runs on MLX). About 9 GB of free memory for Qwen3.5-4B in bf16,
-  or less with `bits: 8`.
+- One of three runtimes for the Qwen3.5-4B router (`router.runtime`):
+  - `mlx` (default): macOS on Apple Silicon, about 9 GB of free memory in bf16, less with `bits: 8`.
+  - `torch`: a CUDA GPU with about 9 GB of memory, or an Apple GPU through MPS.
+  - `llamacpp`: any CPU, from a 2.9 GB 4-bit GGUF file. It decides only, so local targets go to Claude.
 - [uv](https://docs.astral.sh/uv/) and Python 3.10–3.13.
 - The [Claude Code](https://code.claude.com) and/or [Codex](https://github.com/openai/codex) CLIs,
   logged in, for the targets you want to use.
@@ -81,9 +83,14 @@ Every model name, rule, question and threshold lives in `targets.yaml`. A new mo
 ```sh
 git clone https://github.com/7ucardie/trivium && cd trivium
 uv sync                    # MLX and the vendored semif readout; no PyTorch needed
+# or: uv sync --extra torch     (CUDA / MPS)    uv sync --extra llamacpp   (CPU, builds llama.cpp)
 uv tool install -e .       # puts `ask` (and `trivium`) on your PATH
 ask serve                  # keep the router warm; the first run downloads Qwen3.5-4B (~9 GB)
 ```
+
+For the `torch` or `llamacpp` runtime, set `router.runtime` in your config (see Configuration). The
+`llamacpp` runtime downloads the pinned `bartowski/Qwen_Qwen3.5-4B-GGUF` Q4_K_M file on first use,
+or reads a local file from `router.gguf`.
 
 `ask` works without `ask serve`, but then it loads the model for every prompt, which takes several
 seconds. To start the server at every login instead of by hand:
@@ -176,6 +183,20 @@ same rules, confidence thresholds off, on an Apple M5 Pro (full write-up in
 small-sample numbers, and the questions were tuned on the same set with semif, which favours semif.
 Replace the file with your own prompts before trusting any threshold.
 
+### Runtimes
+
+All three runtimes read the same prompt and answer slots through the vendored semif code, so they make
+the same decisions up to arithmetic. On the bundled set, against `mlx`, on an Apple M5 Pro:
+
+| Runtime | Right target | Changed targets | Changed answers | Largest score change | p50 per prompt |
+|---|---|---|---|---|---|
+| `mlx`, bf16 | 29/36 | | | | 253 ms |
+| `torch` on MPS, bf16 | 29/36 | 0/36 | 3/108 | 0.33 | 1,293 ms |
+| `llamacpp` on CPU, Q4_K_M | 27/36 | 3/36 | 4/108 | 0.56 | 2,037 ms |
+
+`torch` on an Apple GPU is five times slower than MLX; it exists for CUDA machines. `llamacpp` runs
+the 4-bit file on the CPU, which costs two prompts on this set and two seconds a prompt.
+
 ### Backends
 
 `router.backend` picks who answers the questions:
@@ -254,8 +275,10 @@ Laya only decides, so with this backend local targets are routed to Claude inste
 
 - Early. It works end to end on the author's machine; interfaces and defaults will change.
 - Calibration and thresholds are fitted on 36 hand-written prompts; nothing ships pre-calibrated.
-- Apple Silicon only for the default backend. semif also has PyTorch (CUDA) and llama.cpp backends
-  that Trivium does not wire up yet.
+- Only the `mlx` runtime has been used day to day. `torch` was tested on Apple MPS, not on a CUDA
+  GPU; `llamacpp` was tested on an Apple CPU. Both match the MLX routing closely on the bundled set
+  (see below), but treat them as new.
+- `ask service` uses launchd, so it is macOS only.
 - Routing happens once per task, not per turn. Once a session is open you stay in that tool.
 - semif's probabilities are not calibrated. Treat `min_confidence` values as starting points.
 - Codex refuses one-shot runs outside a trusted git repository. Trivium leaves that check alone.

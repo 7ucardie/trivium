@@ -10,9 +10,18 @@ router:
   backend: semif
   hybrid_laya: [tools]
   ask_when_unsure: false  # true: when the router is unsure, offer the likeliest targets instead of the fallback
+  # mlx: Apple Silicon (default). torch: CUDA or Apple MPS (`uv sync --extra torch`).
+  # llamacpp: CPU from a GGUF file, decides only (`uv sync --extra llamacpp`).
+  runtime: mlx
   model: Qwen/Qwen3.5-4B
   revision: 851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a   # semif requires a pinned commit
-  bits: null            # null = bf16 (~8 GB RAM, semif-validated); 8 or 4 = in-memory quantisation
+  bits: null            # mlx only. null = bf16 (~8 GB RAM, semif-validated); 8 or 4 = in-memory quantisation
+  device: auto          # torch only: auto (CUDA, else MPS), cuda or mps
+  dtype: bfloat16       # torch only
+  # llamacpp only: a local file in `gguf`, or a pinned download (the Q4_K_M build semif lists).
+  gguf: null
+  gguf_repo: {repo: bartowski/Qwen_Qwen3.5-4B-GGUF, file: Qwen_Qwen3.5-4B-Q4_K_M.gguf, revision: 4168f45a16a1290d65a4ec0fa312ae917a4c15d6}
+  llama_threads: null   # null = all cores
   max_prompt_chars: 2500  # the request is front-loaded; longer prompts keep head + tail
   port: 8765
   laya_model: convaiinnovations/laya
