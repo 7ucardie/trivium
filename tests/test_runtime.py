@@ -302,12 +302,13 @@ def test_backend_mismatch_loads_in_process(monkeypatch):
 
 # --- Laya reads the context first ---------------------------------------------
 
-def test_laya_gets_context_first(monkeypatch):
+def test_laya_keeps_the_repo_sentence(monkeypatch):
     seen = {}
 
     class Agent:
         def predict(self, state, questions):
             seen["keys"] = list(state)
+            seen["state"] = state
             return {"answers": {q: {"probabilities": {o: 1 / len(v["criteria"]) for o in v["criteria"]}}
                                 for q, v in questions.items()}}
 
@@ -315,4 +316,38 @@ def test_laya_gets_context_first(monkeypatch):
     from trivium.laya_engine import LayaEngine
 
     LayaEngine({}).route({"request": "x" * 5000, "context": "inside repo"}, CFG["questions"])
-    assert seen["keys"] == ["context", "request"]
+    assert seen["keys"] == ["request", "context"]  # order kept: context-first cost 9 of 36 tools answers
+    assert len(seen["state"]["request"]) < 400 and seen["state"]["context"] == "inside repo"
+
+
+# --- --json, calibrate --write, eval --sweep -----------------------------------
+
+def test_json_decision(fake_cli, capsys):
+    assert cli.run(["--json", "add retry to the client"]) == 0
+    body = json.loads(capsys.readouterr().out)
+    assert body["target"] == "codex-sol" and body["model"] == "gpt-6-sol"
+    assert body["command"][:3] == ["codex", "-m", "gpt-6-sol"]
+    assert body["alternatives"][0][0] == "codex-sol"
+
+
+def test_calibrate_write_and_load(fake_cli, tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("TRIVIUM_CALIBRATION", str(tmp_path / "calibration.yaml"))
+    rows = [{"prompt": "what does 409 mean", "repo": None, "expect": QUICK}] * 3
+    f = tmp_path / "eval.jsonl"
+    f.write_text("\n".join(json.dumps(r) for r in rows))
+    assert cli.cmd_calibrate([str(f), "--write"]) == 0
+    assert "Saved to" in capsys.readouterr().out
+    loaded = config.load(config.config_path())
+    assert set(config.temperatures(loaded, "semif")) == set(CFG["questions"])
+
+
+def test_sweep_trades_fallback_for_precision():
+    uncertain = {q: {"choice": c, "p": 0.5, "probabilities": {c: 0.5}} for q, c in CODE.items()}
+    confident = {q: {"choice": c, "p": 0.95, "probabilities": {c: 0.95}} for q, c in QUICK.items()}
+    scored = [(None, uncertain, "codex-sol", 0.0), (None, confident, "local", 0.0)]
+    rows = {floor: (right, fell, precise) for floor, right, fell, precise in cli.sweep(CFG, scored)}
+    assert rows[0.0] == (1.0, 0.0, 1.0)
+    # From 0.55 the uncertain prompt falls back to claude-sonnet, which is not its label;
+    # the confident one (0.95) still routes, and routes right.
+    assert rows[0.6] == (0.5, 0.5, 1.0)
+    assert rows[0.9] == (0.5, 0.5, 1.0)

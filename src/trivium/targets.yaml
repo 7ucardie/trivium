@@ -16,7 +16,9 @@ router:
   max_prompt_chars: 2500  # the request is front-loaded; longer prompts keep head + tail
   port: 8765
   laya_model: convaiinnovations/laya
-  laya_subfolder: null  # null = English checkpoint; multilingual or typed-decisions
+  # typed-decisions: 100% on tools and fewer fallbacks in the hybrid than the English checkpoint (null).
+  laya_subfolder: typed-decisions
+  laya_max_request_chars: 300  # Laya reads ~320 tokens and cuts the end; shorter keeps the repo sentence
 
 # Questions ask what the text *says*, not what to do; every option is described.
 questions:

@@ -5,6 +5,8 @@ from __future__ import annotations
 import threading
 import time
 
+from .state import clip
+
 
 class LayaEngine:
     def __init__(self, router_cfg: dict):
@@ -18,6 +20,7 @@ class LayaEngine:
                                subfolder=router_cfg.get("laya_subfolder"))
         self.load_seconds = time.perf_counter() - started
         self.metadata = {"source": f"laya:{router_cfg.get('laya_subfolder') or 'english'}"}
+        self.max_request_chars = router_cfg.get("laya_max_request_chars", 300)
         self.lock = threading.Lock()
 
     def route(self, state: dict, questions: dict) -> tuple[dict, dict]:
@@ -25,10 +28,11 @@ class LayaEngine:
             qid: {"type": "choice", "instructions": q["question"], "criteria": dict(q["options"])}
             for qid, q in questions.items()
         }
-        # Laya reads about 320 tokens of state and cuts the end, so put the short context sentence
-        # first: on a long prompt it is what the tools question depends on.
-        if isinstance(state, dict) and "context" in state:
-            state = {"context": state["context"], **{k: v for k, v in state.items() if k != "context"}}
+        # Laya reads about 320 tokens of state and cuts the end, which dropped the repository sentence
+        # on long prompts. Moving that sentence first cost 9 of 36 tools answers on short prompts, so
+        # keep the order and shorten the request instead (head and tail, where the question usually is).
+        if isinstance(state, dict) and "request" in state:
+            state = {**state, "request": clip(state["request"], self.max_request_chars)}
         started = time.perf_counter()
         with self.lock:
             result = self.agent.predict(state, laya_questions)

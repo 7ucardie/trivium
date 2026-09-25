@@ -100,6 +100,7 @@ ask service uninstall
 ask "fix the flaky test in tests/test_auth.py"   # route, then open an interactive session
 ask -p "regex for a semver string"               # one-shot: print the answer and exit
 ask why "plan the billing architecture"          # show the decision and probabilities only
+ask why --json "plan the billing architecture"   # the same as JSON, for scripts and editors
 ask --ask "refactor the auth module"             # show the likeliest targets and pick one
 ask --to opus "..."                              # skip the router: target, short name or model id
 ask --via codex "..."                            # keep the routed tier, use the other vendor
@@ -138,6 +139,7 @@ work would a skilled engineer need?" with time-based options moved difficulty ac
 ```sh
 ask eval evals/prompts.jsonl --show-misses       # accuracy per question and per target
 ask eval evals/prompts.jsonl --backend laya      # same prompts, Laya instead of semif
+ask eval evals/prompts.jsonl --sweep             # right target vs fallback rate per confidence floor
 ask rate bad --should opus                       # label the last real decision
 ask export --out mine.jsonl --only-rated         # decision log -> labelled prompts to review
 ```
@@ -167,7 +169,8 @@ same rules, confidence thresholds off, on an Apple M5 Pro (full write-up in
 | semif + Qwen3.5-4B, MLX bf16 (default) | **94.4%** | **80.6%** | 80.6% | **80.6%** | 241 ms |
 | Laya 0.3.7, English checkpoint | 69.4% | 47.2% | 97.2% | 38.9% | **98 ms** |
 | Laya 0.3.7, typed-decisions checkpoint | 80.6% | 47.2% | **100%** | 47.2% | 99 ms |
-| Hybrid: Laya for tools, semif for the rest | **94.4%** | **80.6%** | 97.2% | **83.3%** | 263 ms |
+| Hybrid: Laya English for tools, semif for the rest | **94.4%** | **80.6%** | 97.2% | **83.3%** | 263 ms |
+| Hybrid: Laya typed-decisions for tools (default) | **94.4%** | **80.6%** | **100%** | **83.3%** | 247 ms |
 
 "Right target" means the router's answers lead to the same target as the hand labels would. These are
 small-sample numbers, and the questions were tuned on the same set with semif, which favours semif.
@@ -188,9 +191,17 @@ Replace the file with your own prompts before trusting any threshold.
 configured backend in-process rather than read one router's scores with another's calibration;
 restart `ask serve` to switch it.
 
-Laya reads about 320 tokens of evidence and cuts the end, so Trivium hands it the repository sentence
-before the prompt. On a 60-line pasted log, that moved Laya's "needs the workspace" score from 0.15
-both inside and outside a repository (the sentence was cut off) to 0.64 inside and 0.09 outside.
+Laya reads about 320 tokens of evidence and cuts the end, so on a long prompt it never saw the
+repository sentence. Moving that sentence in front of the prompt fixed long prompts but cost 9 of the
+36 tools answers on short ones, so Trivium instead keeps the order and shortens the request to
+`router.laya_max_request_chars` (300) for Laya, keeping its start and end. On a 60-line pasted log
+that moves Laya's "needs the workspace" score from 0.15 both inside and outside a repository to 0.60
+inside and 0.08 outside, and leaves the bundled set unchanged (its longest prompt is 147 characters).
+The 300 was chosen on two made-up long prompts, so treat it as a starting point.
+
+Laya defaults to its `typed-decisions` checkpoint. In the hybrid it scored 100% on tools against the
+English checkpoint's 97.2%, and sent 8.3% of prompts to the fallback instead of 13.9%, because it
+reports its answers more confidently. Both differences are one or two prompts on the bundled set.
 
 ### Calibration
 
@@ -198,7 +209,8 @@ Router scores are not probabilities until you calibrate them. `ask calibrate` fi
 per question on labelled prompts and prints a block for your config:
 
 ```sh
-ask calibrate evals/prompts.jsonl --backend hybrid
+ask calibrate evals/prompts.jsonl --backend hybrid           # prints a block to paste
+ask calibrate evals/prompts.jsonl --backend hybrid --write   # or saves it to ~/.config/trivium/calibration.yaml
 ```
 
 ```yaml
@@ -208,6 +220,15 @@ calibration:
     difficulty: 1.35
     tools: 0.25   # flagged: at the grid edge, needs more labelled data
 ```
+
+`--write` keeps fitted values in their own file, so your hand-edited `targets.yaml` and its comments
+stay untouched; the file overrides the config's `calibration` block backend by backend.
+
+Then pick the thresholds with `ask eval --sweep`, which applies one confidence floor to every question
+and shows the right-target rate, the fallback rate and the accuracy of the prompts that were not sent
+to the fallback. On the bundled set a floor of 0.55 gave the best right-target rate, 86.1%, for semif
+and both hybrids, but that is measured on the same 36 prompts it would be tuned on, so the shipped
+defaults stay where they were.
 
 Two lessons from the bundled set. First, fit on a few hundred labels, not 36: on this set Laya's
 tools answers are right 35 times in 36 yet reported at a median confidence of 0.75, so the fit runs to the edge of

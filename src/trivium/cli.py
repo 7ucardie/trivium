@@ -6,6 +6,7 @@
   ask --to opus "..."                skip the router (still logged as a label)
   ask --via codex "..."              route, then use the Codex model of the same tier
   ask why "..."                      show the decision without running anything
+  ask why --json "..."               the decision as JSON, for scripts and editors
   ask serve                          keep the router model warm (recommended)
   ask service install|uninstall|status   run `ask serve` at login with launchd
   ask rate good|bad [--should T]     label the last decision
@@ -116,8 +117,10 @@ def run(argv: list[str]) -> int:
     parser.add_argument("--via", choices=["claude", "codex"], help="keep the routed tier, use this vendor")
     parser.add_argument("--no-local", action="store_true", help="never answer with the local model")
     parser.add_argument("--dry", action="store_true", help="decide and print, but do not run")
+    parser.add_argument("--json", action="store_true", help="print the decision as JSON on stdout, do not run")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
+    args.dry = args.dry or args.json
 
     prompt = " ".join(args.prompt).strip()
     if not prompt and not sys.stdin.isatty():
@@ -150,7 +153,18 @@ def run(argv: list[str]) -> int:
     if no_local and cfg["targets"][decision.target]["vendor"] == "local":
         decision.target = policy.via(cfg, decision.target, "claude")
 
-    print(describe(cfg, decision, elapsed, args.verbose or args.dry), file=sys.stderr)
+    if args.json:
+        target = cfg["targets"][decision.target]
+        print(json.dumps({
+            "target": decision.target, "vendor": target["vendor"], "model": target["model"],
+            "effort": target.get("effort"), "reason": decision.reason, "unsure": decision.unsure,
+            "routed": routed, "backend": name, "route_ms": elapsed and round(elapsed * 1000, 1),
+            "answers": decision.answers,
+            "alternatives": policy.alternatives(cfg, decision.answers) if decision.answers else [],
+            "command": None if target["vendor"] == "local" else launch.argv(target, prompt, one_shot=args.one_shot),
+        }, indent=2))
+    else:
+        print(describe(cfg, decision, elapsed, args.verbose or args.dry), file=sys.stderr)
     log.append({
         "type": "decision", "prompt": prompt, "cwd": cwd, "repo": repo, "backend": name,
         "answers": decision.answers, "routed": routed, "target": decision.target,
@@ -223,40 +237,72 @@ def cmd_eval(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="ask eval")
     parser.add_argument("file")
     parser.add_argument("--show-misses", action="store_true")
+    parser.add_argument("--sweep", action="store_true",
+                        help="also show right target and fallback rate for a range of confidence floors")
     parser.add_argument("--backend", choices=BACKENDS, help="router to evaluate (default: config)")
     args = parser.parse_args(argv)
     cfg = config.load()
     name = backend_name(cfg, args.backend)
     engine = backend(cfg, name)
     rows = _labelled(args.file)
-    hits = {q: 0 for q in cfg["questions"]}
-    targets_hit, unsure, times, misses = 0, 0, [], []
+    temps = config.temperatures(cfg, name)
+    scored = []  # route every prompt once; thresholds are applied afterwards
     for row in rows:
-        decision, elapsed = route(cfg, engine, row["prompt"], row.get("repo"), name)
-        times.append(elapsed)
-        expected = policy.decide(cfg, {q: {"choice": c, "p": 1.0} for q, c in row["expect"].items()})
+        probs, elapsed = raw_route(cfg, engine, row["prompt"], row.get("repo"))
+        expected = policy.decide(cfg, {q: {"choice": c, "p": 1.0} for q, c in row["expect"].items()}).target
+        scored.append((row, policy.summarize(probs, temps), expected, elapsed))
+    hits = {q: 0 for q in cfg["questions"]}
+    targets_hit, unsure, misses = 0, 0, []
+    for row, answers, expected, _ in scored:
+        decision = policy.decide(cfg, answers)
         unsure += bool(decision.unsure)
-        targets_hit += decision.target == expected.target
+        targets_hit += decision.target == expected
         wrong = {}
         for q, want in row["expect"].items():
-            got = decision.answers[q]["choice"]
+            got = answers[q]["choice"]
             hits[q] += got == want
             if got != want:
-                wrong[q] = f"{got}@{decision.answers[q]['p']:.2f} (want {want})"
-        if wrong or decision.target != expected.target:
-            misses.append((row["prompt"], decision.target, expected.target, wrong))
+                wrong[q] = f"{got}@{answers[q]['p']:.2f} (want {want})"
+        if wrong or decision.target != expected:
+            misses.append((row["prompt"], decision.target, expected, wrong))
     n = len(rows)
-    print(f"{n} prompts · router {engine.metadata['source']}")
+    times = sorted(t for *_, t in scored)
+    print(f"{n} prompts · router {engine.metadata['source']}" + (" · calibrated" if temps else ""))
     for q, h in hits.items():
         print(f"  {q:<11} {h / n:6.1%}")
     print(f"  {'target':<11} {targets_hit / n:6.1%}   (same target as the labels would route to)")
     print(f"  {'unsure':<11} {unsure / n:6.1%}   (sent to fallback {cfg['fallback']})")
-    times.sort()
     print(f"  latency     p50 {times[n // 2] * 1000:.0f} ms · p90 {times[int(n * 0.9)] * 1000:.0f} ms")
+    if args.sweep:
+        print(f"\n  one floor for every question (your config: {cfg.get('min_confidence', {})})")
+        print(f"  {'floor':>5}  {'right target':>12}  {'fallback':>8}  {'right when routed':>17}")
+        for floor, right, fell, precise in sweep(cfg, scored):
+            print(f"  {floor:5.2f}  {right:12.1%}  {fell:8.1%}  {precise:17.1%}")
     if args.show_misses:
         for prompt, got, want, wrong in misses:
             print(f"\n- {prompt[:90]!r}\n  routed {got}, labels say {want}  {wrong or ''}")
     return 0
+
+
+FLOORS = [0.0, 0.3, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.8, 0.9]
+
+
+def sweep(cfg: dict, scored: list) -> list[tuple[float, float, float, float]]:
+    """(floor, right target, fallback rate, right target among prompts that were not sent to fallback)."""
+    out = []
+    for floor in FLOORS:
+        at_floor = {**cfg, "min_confidence": {q: floor for q in cfg["questions"]}}
+        right = fell = routed_right = 0
+        for _, answers, expected, _ in scored:
+            decision = policy.decide(at_floor, answers)
+            right += decision.target == expected
+            if decision.unsure:
+                fell += 1
+            else:
+                routed_right += decision.target == expected
+        n = len(scored)
+        out.append((floor, right / n, fell / n, routed_right / (n - fell) if n > fell else 0.0))
+    return out
 
 
 def cmd_calibrate(argv: list[str]) -> int:
@@ -265,6 +311,8 @@ def cmd_calibrate(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="ask calibrate")
     parser.add_argument("file", help="labelled prompts, same format as ask eval")
     parser.add_argument("--backend", choices=BACKENDS, help="router to calibrate (default: config)")
+    parser.add_argument("--write", action="store_true",
+                        help=f"save the temperatures to {config.calibration_path()} instead of printing a block")
     args = parser.parse_args(argv)
     cfg = config.load()
     name = backend_name(cfg, args.backend)
@@ -284,9 +332,14 @@ def cmd_calibrate(argv: list[str]) -> int:
         edge = "  (at the grid edge: needs more labelled data)" if calibrate.at_edge(t) else ""
         print(f"  {q:<11} {t:6.2f}  {calibrate.nll(s, 1.0):10.3f} {calibrate.nll(s, t):6.3f}"
               f"  {calibrate.ece(s, 1.0):10.3f} {calibrate.ece(s, t):6.3f}{edge}")
-    print(f"\nAdd to your targets.yaml ({config.config_path()}):\n\ncalibration:\n  {name}:")
-    for q, t in fitted.items():
-        print(f"    {q}: {t}")
+    if args.write:
+        path = config.write_calibration(name, fitted)
+        print(f"\nSaved to {path}; it overrides calibration.{name} in {config.config_path()}.")
+        print("Re-check your min_confidence values with `ask eval --sweep`: they are read on the new scale.")
+    else:
+        print(f"\nAdd to your targets.yaml ({config.config_path()}), or re-run with --write:\n\ncalibration:\n  {name}:")
+        for q, t in fitted.items():
+            print(f"    {q}: {t}")
     if len(rows) < 200:
         print(f"\nOnly {len(rows)} labelled prompts: treat these temperatures as a rough start, "
               "and re-fit once you have a few hundred.", file=sys.stderr)

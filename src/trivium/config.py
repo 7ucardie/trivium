@@ -21,10 +21,32 @@ def config_path() -> Path:
     return Path(str(files("trivium") / "targets.yaml"))
 
 
+def calibration_path() -> Path:
+    """Where `ask calibrate --write` keeps fitted temperatures, apart from the hand-edited config."""
+    if env := os.environ.get("TRIVIUM_CALIBRATION"):
+        return Path(env).expanduser()
+    return USER_CONFIG.parent / "calibration.yaml"
+
+
 def load(path: Path | None = None) -> dict:
     cfg = yaml.safe_load((path or config_path()).read_text())
+    written = calibration_path()
+    if written.exists():
+        # Fitted values override the config's calibration block, backend by backend.
+        cfg["calibration"] = {**(cfg.get("calibration") or {}), **(yaml.safe_load(written.read_text()) or {})}
     validate(cfg)
     return cfg
+
+
+def write_calibration(backend: str, temperatures: dict) -> Path:
+    path = calibration_path()
+    current = yaml.safe_load(path.read_text()) if path.exists() else {}
+    current = current or {}
+    current[backend] = {q: round(float(t), 4) for q, t in temperatures.items()}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("# Written by `ask calibrate --write`. Per backend, per question: p ** (1/T).\n"
+                    + yaml.safe_dump(current, sort_keys=False))
+    return path
 
 
 def temperatures(cfg: dict, backend: str) -> dict:
