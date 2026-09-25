@@ -58,6 +58,17 @@ def make_server(engine, port: int, backend: str = "semif") -> HTTPServer:
     return HTTPServer((HOST, port), Handler)
 
 
+def port_free(port: int) -> bool:
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        try:
+            probe.bind((HOST, port))
+        except OSError:
+            return False
+    return True
+
+
 def _chain(first: str, rest):
     yield first
     yield from rest

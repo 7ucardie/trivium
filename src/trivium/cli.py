@@ -24,7 +24,7 @@ import os
 import sys
 import time
 
-from . import config, launch, log, policy, state
+from . import config, launch, log, policy, server, state
 from .server import Remote
 
 BACKENDS = ["semif", "laya", "hybrid"]
@@ -195,6 +195,19 @@ def cmd_serve(argv: list[str]) -> int:
 
     cfg = config.load()
     name = backend_name(cfg)
+    port = cfg["router"]["port"]
+    # Check the port before spending seconds on loading a model that could not be served.
+    running = Remote(port)
+    if running.alive():
+        print(f"trivium: a server is already running on port {port} "
+              f"(backend {running.backend}, {running.metadata['source']}).\n"
+              f"  Stop it first: `ask service uninstall` if it runs as a service, otherwise "
+              f"`kill $(lsof -tiTCP:{port} -sTCP:LISTEN)`.", file=sys.stderr)
+        return 1
+    if not server.port_free(port):
+        print(f"trivium: port {port} is in use by another program; set router.port to a free port.",
+              file=sys.stderr)
+        return 1
     engine = load_engine(cfg, name)
     # Warm up: the first call at a new shape compiles kernels.
     engine.route(state.build("warm up", None, 100), cfg["questions"])

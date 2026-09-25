@@ -372,3 +372,19 @@ def test_llamacpp_runtime_routes_local_to_claude(fake_cli, monkeypatch, capsys):
     monkeypatch.setattr(cli.config, "answers_locally", lambda cfg: False)
     assert cli.run(["--dry", "what does 409 mean"]) == 0
     assert "claude-haiku" in capsys.readouterr().err
+
+
+def test_serve_refuses_a_taken_port(monkeypatch, capsys):
+    httpd = server.make_server(FakeEngine(source="old"), 0, backend="semif")
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    port = httpd.server_address[1]
+    loaded = []
+    monkeypatch.setattr(cli.config, "load", lambda: {**CFG, "router": {**CFG["router"], "port": port}})
+    monkeypatch.setattr(cli, "load_engine", lambda cfg, name: loaded.append(name))
+    try:
+        assert cli.cmd_serve([]) == 1
+        err = capsys.readouterr().err
+        assert "already running" in err and "backend semif" in err and not loaded
+        assert not server.port_free(port)
+    finally:
+        httpd.shutdown()
