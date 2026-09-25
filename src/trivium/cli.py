@@ -246,8 +246,14 @@ def cmd_rate(argv: list[str]) -> int:
     return 0
 
 
-def _labelled(path: str) -> list[dict]:
-    return [json.loads(line) for line in open(path) if line.strip()]
+def _labelled(path: str, split: str | None = None) -> list[dict]:
+    """Labelled prompts; with split, only rows whose "split" field matches (e.g. train or test)."""
+    rows = [json.loads(line) for line in open(path) if line.strip()]
+    if split:
+        rows = [r for r in rows if r.get("split") == split]
+        if not rows:
+            raise SystemExit(f"trivium: no rows with split={split!r} in {path}")
+    return rows
 
 
 def cmd_eval(argv: list[str]) -> int:
@@ -257,11 +263,12 @@ def cmd_eval(argv: list[str]) -> int:
     parser.add_argument("--sweep", action="store_true",
                         help="also show right target and fallback rate for a range of confidence floors")
     parser.add_argument("--backend", choices=BACKENDS, help="router to evaluate (default: config)")
+    parser.add_argument("--split", help="only rows with this split field, e.g. test")
     args = parser.parse_args(argv)
     cfg = config.load()
     name = backend_name(cfg, args.backend)
     engine = backend(cfg, name)
-    rows = _labelled(args.file)
+    rows = _labelled(args.file, args.split)
     temps = config.temperatures(cfg, name)
     scored = []  # route every prompt once; thresholds are applied afterwards
     for row in rows:
@@ -284,7 +291,8 @@ def cmd_eval(argv: list[str]) -> int:
             misses.append((row["prompt"], decision.target, expected, wrong))
     n = len(rows)
     times = sorted(t for *_, t in scored)
-    print(f"{n} prompts · router {engine.metadata['source']}" + (" · calibrated" if temps else ""))
+    print(f"{n} prompts{f' ({args.split})' if args.split else ''} · router {engine.metadata['source']}"
+          + (" · calibrated" if temps else ""))
     for q, h in hits.items():
         print(f"  {q:<11} {h / n:6.1%}")
     print(f"  {'target':<11} {targets_hit / n:6.1%}   (same target as the labels would route to)")
@@ -330,11 +338,12 @@ def cmd_calibrate(argv: list[str]) -> int:
     parser.add_argument("--backend", choices=BACKENDS, help="router to calibrate (default: config)")
     parser.add_argument("--write", action="store_true",
                         help=f"save the temperatures to {config.calibration_path()} instead of printing a block")
+    parser.add_argument("--split", help="only rows with this split field, e.g. train")
     args = parser.parse_args(argv)
     cfg = config.load()
     name = backend_name(cfg, args.backend)
     engine = backend(cfg, name)
-    rows = _labelled(args.file)
+    rows = _labelled(args.file, args.split)
     samples: dict[str, list] = {q: [] for q in cfg["questions"]}
     for row in rows:
         probs, _ = raw_route(cfg, engine, row["prompt"], row.get("repo"))

@@ -431,3 +431,14 @@ def test_recent_decisions_reads_tail(tmp_path):
     recent = status.recent_decisions(f, limit=5)
     assert [d["prompt"] for d in recent] == ["p39", "p38", "p37", "p36", "p35"]
     assert status.recent_decisions(tmp_path / "missing.jsonl") == []
+
+
+def test_eval_split_filters_rows(fake_cli, tmp_path, capsys):
+    rows = [{"prompt": "what does 409 mean", "repo": None, "expect": QUICK, "split": "train"},
+            {"prompt": "add retry", "repo": "demo", "expect": CODE, "split": "test"}]
+    f = tmp_path / "eval.jsonl"
+    f.write_text("\n".join(json.dumps(r) for r in rows))
+    assert cli.cmd_eval([str(f), "--split", "test"]) == 0
+    assert capsys.readouterr().out.startswith("1 prompts (test)")
+    with pytest.raises(SystemExit):
+        cli.cmd_eval([str(f), "--split", "holdout"])

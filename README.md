@@ -218,7 +218,21 @@ so every row is pre-filled and labelled with where its answers came from:
 Rows with `needs_review: true` need a human to check the per-question answers before the file is used
 for evaluation or calibration. Decisions made with `--to` never ran the router and are skipped.
 
-`evals/prompts.jsonl` holds 36 prompts I wrote and labelled by hand. Same prompts, same questions,
+Trivium ships two labelled sets. `evals/calibration-100.jsonl` is the main one: 100 prompts across
+every kind, difficulty and tools answer, including general questions typed inside a repository, long
+pasted logs and Dutch prompts. Two labellers answered them independently (agreement 100% on kind, 90%
+on difficulty, 97% on tools) and the 12 disagreements were settled in the file. It is split 72 / 28 so
+that calibration is fitted on one part and checked on the other
+([write-up](evals/results/2026-09-25-calibration-100.md)). With the shipped config, semif routes to the
+right target on 77.8% of the training prompts, **71.4% of the held-out prompts** and 80.6% of the older
+set below; kind, difficulty and tools score 89.3%, 82.1% and 78.6% on the held-out prompts.
+
+```sh
+ask eval evals/calibration-100.jsonl --split test     # the held-out 28
+ask calibrate evals/calibration-100.jsonl --split train
+```
+
+`evals/prompts.jsonl` holds 36 prompts I wrote and labelled by hand earlier. Same prompts, same questions,
 same rules, confidence thresholds off, on an Apple M5 Pro (full write-up in
 [`evals/results/2026-09-23.md`](evals/results/2026-09-23.md)):
 
@@ -228,11 +242,11 @@ same rules, confidence thresholds off, on an Apple M5 Pro (full write-up in
 | Laya 0.3.7, English checkpoint | 69.4% | 47.2% | 97.2% | 38.9% | **98 ms** |
 | Laya 0.3.7, typed-decisions checkpoint | 80.6% | 47.2% | **100%** | 47.2% | 99 ms |
 | Hybrid: Laya English for tools, semif for the rest | **94.4%** | **80.6%** | 97.2% | **83.3%** | 263 ms |
-| Hybrid: Laya typed-decisions for tools (default) | **94.4%** | **80.6%** | **100%** | **83.3%** | 247 ms |
+| Hybrid: Laya typed-decisions for tools | **94.4%** | **80.6%** | **100%** | **83.3%** | 247 ms |
 
-"Right target" means the router's answers lead to the same target as the hand labels would. These are
-small-sample numbers, and the questions were tuned on the same set with semif, which favours semif.
-Replace the file with your own prompts before trusting any threshold.
+"Right target" means the router's answers lead to the same target as the hand labels would. The
+question wording was tuned on this set with semif, which favours semif; on the larger set the hybrid
+does worse than semif (see Backends).
 
 ### Runtimes
 
@@ -255,7 +269,10 @@ the 4-bit file on the CPU, which costs two prompts on this set and two seconds a
 - `semif` (default): Qwen3.5-4B answers all three and also answers local prompts.
 - `laya`: the Laya encoder answers all three. Faster, decides only, so local targets go to Claude.
 - `hybrid`: Laya answers the questions listed in `router.hybrid_laya` (default `[tools]`), semif the
-  rest. The best result on the bundled set, at the cost of a second model in memory.
+  rest. It looked best on the first 36 prompts, but on the 100-prompt set it routes general questions
+  typed inside a repository ("what does ECONNREFUSED mean") as if they needed the workspace, and it
+  scores 57.1% against semif's 71.4% on the held-out prompts. Use semif unless your own evaluation
+  says otherwise.
 
 `laya` and `hybrid` need `uv sync --extra laya`.
 
@@ -298,9 +315,13 @@ stay untouched; the file overrides the config's `calibration` block backend by b
 
 Then pick the thresholds with `ask eval --sweep`, which applies one confidence floor to every question
 and shows the right-target rate, the fallback rate and the accuracy of the prompts that were not sent
-to the fallback. On the bundled set a floor of 0.55 gave the best right-target rate, 86.1%, for semif
-and both hybrids, but that is measured on the same 36 prompts it would be tuned on, so the shipped
-defaults stay where they were.
+to the fallback.
+
+The shipped config holds semif temperatures fitted on the 72 training prompts of the 100-prompt set
+(kind 0.95, difficulty 1.21, tools 2.16). On the held-out 28 they lower the calibration error of the
+tools answers from 0.129 to 0.068 and of difficulty from 0.149 to 0.131. It ships **no** confidence
+floors: on that set every floor from 0.3 to 0.8 routed fewer prompts right, and none reduced the
+prompts sent to a model that was too weak, which is what a fallback is meant to prevent.
 
 Two lessons from the bundled set. First, fit on a few hundred labels, not 36: on this set Laya's
 tools answers are right 35 times in 36 yet reported at a median confidence of 0.75, so the fit runs to the edge of
@@ -325,7 +346,8 @@ Laya only decides, so with this backend local targets are routed to Claude inste
 ## Status and limits
 
 - Early. It works end to end on the author's machine; interfaces and defaults will change.
-- Calibration and thresholds are fitted on 36 hand-written prompts; nothing ships pre-calibrated.
+- Calibration is fitted on 72 labelled prompts and checked on 28; one held-out prompt is 3.6 points.
+  Your own prompts (`ask export`) are the better calibration set.
 - Only the `mlx` runtime has been used day to day. `torch` was tested on Apple MPS, not on a CUDA
   GPU; `llamacpp` was tested on an Apple CPU. Both match the MLX routing closely on the bundled set
   (see below), but treat them as new.

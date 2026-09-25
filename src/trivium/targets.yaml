@@ -59,13 +59,17 @@ questions:
 # Folders offered first in the dashboard's project picker (recent ones from the log follow).
 projects: []
 
-# Per-backend temperatures from `ask calibrate`: p ** (1/T), renormalised. Empty = raw scores.
-calibration: {}
+# Per-backend temperatures, p ** (1/T) renormalised. The semif values were fitted on the 72 training
+# prompts of evals/calibration-100.jsonl and checked on its 28 held-out prompts, where they lowered the
+# calibration error of the tools answers from 0.129 to 0.068 and of difficulty from 0.149 to 0.131.
+# They do not change which option wins, only how sure the percentages claim to be.
+calibration:
+  semif: {kind: 0.9549, difficulty: 1.2056, tools: 2.159}
 
-min_confidence:
-  kind: 0.45
-  difficulty: 0.45
-  tools: 0.55
+# Answers below these confidences send the prompt to `fallback`. Empty by default: on the 136 labelled
+# prompts every floor from 0.3 to 0.8 routed fewer prompts right and did not reduce the prompts sent to
+# a model that was too weak. Set values here, or router.ask_when_unsure, if you prefer to be asked.
+min_confidence: {}
 
 # tier lets `--via claude|codex` swap a target for the other vendor's equivalent.
 targets:

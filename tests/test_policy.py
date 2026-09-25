@@ -29,7 +29,9 @@ def test_bundled_rules(labels, target):
 def test_low_confidence_falls_back():
     a = answers("code_change", "hard", "workspace")
     a["difficulty"]["p"] = 0.3
-    d = policy.decide(CFG, a)
+    floors = {**CFG, "min_confidence": {"difficulty": 0.45}}  # the shipped config has no floors
+    assert policy.decide(CFG, a).target == "codex-astra"
+    d = policy.decide(floors, a)
     assert d.target == CFG["fallback"] and d.unsure == ["difficulty"]
 
 
