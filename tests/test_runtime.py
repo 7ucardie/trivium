@@ -388,3 +388,33 @@ def test_serve_refuses_a_taken_port(monkeypatch, capsys):
         assert not server.port_free(port)
     finally:
         httpd.shutdown()
+
+
+# --- status page ------------------------------------------------------------------
+
+def test_status_page_escapes_and_counts(running_server, tmp_path, monkeypatch):
+    import urllib.request
+
+    from trivium import log
+
+    engine, remote = running_server
+    log_file = tmp_path / "decisions.jsonl"
+    records = [decision("a", "<script>alert(1)</script> add retry", CODE, "codex-sol"),
+               {"type": "feedback", "decision": "a", "verdict": "bad", "should": "claude-opus"}]
+    log_file.write_text("\n".join(json.dumps(r) for r in records))
+    monkeypatch.setattr(log, "LOG", log_file)
+    remote.route({"request": "what is 409", "context": "x"}, CFG["questions"])
+    page = urllib.request.urlopen(remote.base + "/").read().decode()
+    assert "<script>alert(1)</script>" not in page and "&lt;script&gt;" in page
+    assert "1 routed" in page and "codex-sol" in page and "claude-opus" in page
+    assert urllib.request.urlopen(remote.base + "/favicon.ico").status == 204
+
+
+def test_recent_decisions_reads_tail(tmp_path):
+    from trivium import status
+
+    f = tmp_path / "log.jsonl"
+    f.write_text("\n".join(json.dumps(decision(str(i), f"p{i}", QUICK, "local", ts=i)) for i in range(40)) + "\nnot json")
+    recent = status.recent_decisions(f, limit=5)
+    assert [d["prompt"] for d in recent] == ["p39", "p38", "p37", "p36", "p35"]
+    assert status.recent_decisions(tmp_path / "missing.jsonl") == []

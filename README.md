@@ -92,6 +92,10 @@ For the `torch` or `llamacpp` runtime, set `router.runtime` in your config (see 
 `llamacpp` runtime downloads the pinned `bartowski/Qwen_Qwen3.5-4B-GGUF` Q4_K_M file on first use,
 or reads a local file from `router.gguf`.
 
+While `ask serve` runs, http://127.0.0.1:8765/ shows a status page: the loaded model, backend and
+runtime, uptime, requests served, routing latency and your recent decisions with their ratings. It
+refreshes every 15 seconds and only listens on 127.0.0.1.
+
 `ask` works without `ask serve`, but then it loads the model for every prompt, which takes several
 seconds. To start the server at every login instead of by hand:
 
