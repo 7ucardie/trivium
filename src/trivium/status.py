@@ -28,7 +28,9 @@ def recent_decisions(path: Path, limit: int = 25) -> list[dict]:
         except json.JSONDecodeError:
             continue
     feedback = {r["decision"]: r for r in records if r.get("type") == "feedback"}
-    decisions = [dict(r, feedback=feedback.get(r.get("id"))) for r in records if r.get("type") == "decision"]
+    picks = {r["decision"]: r["target"] for r in records if r.get("type") == "pick"}
+    decisions = [dict(r, feedback=feedback.get(r.get("id")), target=picks.get(r.get("id"), r.get("target")))
+                 for r in records if r.get("type") == "decision"]
     return decisions[::-1][:limit]
 
 

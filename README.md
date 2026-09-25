@@ -105,6 +105,53 @@ ask service status
 ask service uninstall
 ```
 
+## Terminal app
+
+Run `trivium` (or `ask` with no arguments) in a project folder. It stays open like the claude and codex
+CLIs: type a prompt, see where it would go, and act on it with one key.
+
+```text
+trivium · ~/workspaces/billing-service (billing-service) · semif · /help for keys
+› add retry with backoff to the stripe client
+  → codex-sol  gpt-6-sol  code_change · moderate · workspace  258 ms
+    1 codex-sol 78%   2 claude-sonnet 15%   3 claude-haiku 5%
+    enter open Codex · 1-3 pick · p one-shot · e edit · x drop
+```
+
+Enter opens the chosen tool right there, and you come back to trivium when you exit it. After each run
+it asks whether that was the right model (`g`, or `b` and what it should have been), which is what
+`ask export` later turns into tuning data. `/cd DIR` switches project; history is kept between runs.
+
+## Web dashboard
+
+While `ask serve` runs, http://127.0.0.1:8765/ is a dashboard with the same flow: pick a project, type
+a prompt, see the decision with every answer's probabilities, click another target if you disagree,
+then **Open in Claude Code / Codex** (a new Terminal window in that project) or **One-shot answer
+here** (streamed into the page). Rate the result with one click; recent decisions sit underneath.
+The simpler read-only page is still at `/status`.
+
+### Embedding it in another dashboard
+
+The dashboard is a client of a small JSON API on the same server, so another dashboard can use the API
+directly:
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/api/status` | | model, backend, runtime, uptime, counters, routing latencies |
+| GET | `/api/decisions?limit=25` | | recent decisions with picks and ratings |
+| GET | `/api/projects` | | folders for a project picker |
+| GET | `/api/targets` | | every target with vendor, model and tier |
+| POST | `/api/decide` | `{prompt, cwd}` | the decision: `id`, `target`, `answers`, `alternatives` |
+| POST | `/api/pick` | `{id, target}` | records choosing another target |
+| POST | `/api/run` | `{id, target?, mode}` | `mode: "oneshot"` streams text; `"terminal"` opens a window |
+| POST | `/api/rate` | `{id, verdict, should?}` | records `good` or `bad` |
+
+Every `/api` call needs the header `X-Trivium-Token` with the value from `ask token`, and POST bodies
+must be `application/json`. The server only answers on 127.0.0.1 or localhost, and refuses browser
+requests from other sites unless their origin is listed in `router.allowed_origins`. That matters,
+because `/api/run` starts `claude` and `codex`: keep the token private, and only list origins you
+control. The dashboard page itself cannot be framed by another site.
+
 ## Usage
 
 ```sh

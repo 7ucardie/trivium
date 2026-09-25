@@ -1,5 +1,7 @@
 """ask: route a prompt to local Qwen, Claude Code or Codex.
 
+  trivium                            the terminal app: type prompts, pick, run and rate in one place
+
   ask "fix the flaky auth test"      route, then open an interactive session
   ask -p "what does EPERM mean"      one-shot: print the answer and exit
   ask --ask "..."                    show the likeliest targets and let me pick
@@ -14,6 +16,7 @@
   ask calibrate evals/prompts.jsonl  fit per-question temperatures from labelled prompts
   ask export --out mine.jsonl        turn the decision log into labelled prompts to review
   ask targets                        list targets and the config in use
+  ask token                          the API token for connecting another dashboard
 """
 
 from __future__ import annotations
@@ -386,6 +389,15 @@ def cmd_export(argv: list[str]) -> int:
     return 0
 
 
+def cmd_token(argv: list[str]) -> int:
+    """Print the API token, for connecting another dashboard or script to `ask serve`."""
+    from . import security
+
+    print(security.token())
+    print(f"(stored in {security.token_path()}; send it as {security.TOKEN_HEADER})", file=sys.stderr)
+    return 0
+
+
 def cmd_targets(argv: list[str]) -> int:
     cfg = config.load()
     print(f"config: {config.config_path()} · backend: {backend_name(cfg)} · "
@@ -405,11 +417,17 @@ COMMANDS = {
     "calibrate": cmd_calibrate,
     "export": cmd_export,
     "targets": cmd_targets,
+    "token": cmd_token,
 }
 
 
 def main() -> None:
     argv = sys.argv[1:]
+    if not argv and sys.stdin.isatty():
+        # `trivium` or `ask` on its own opens the terminal app.
+        from . import repl
+
+        sys.exit(repl.main())
     if argv and argv[0] in COMMANDS:
         sys.exit(COMMANDS[argv[0]](argv[1:]))
     sys.exit(run(argv))

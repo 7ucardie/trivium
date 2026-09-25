@@ -9,6 +9,8 @@ router:
   # hybrid: Laya answers the questions in hybrid_laya, semif the rest (needs the laya extra).
   backend: semif
   hybrid_laya: [tools]
+  terminal_app: Terminal   # the dashboard's "Open in Terminal" uses this app (e.g. iTerm)
+  allowed_origins: []      # other dashboards that may call the API from the browser, e.g. http://localhost:3000
   ask_when_unsure: false  # true: when the router is unsure, offer the likeliest targets instead of the fallback
   # mlx: Apple Silicon (default). torch: CUDA or Apple MPS (`uv sync --extra torch`).
   # llamacpp: CPU from a GGUF file, decides only (`uv sync --extra llamacpp`).
@@ -53,6 +55,9 @@ questions:
     options:
       none: no, it can be answered from general knowledge alone
       workspace: yes, it needs to read or change files or run commands
+
+# Folders offered first in the dashboard's project picker (recent ones from the log follow).
+projects: []
 
 # Per-backend temperatures from `ask calibrate`: p ** (1/T), renormalised. Empty = raw scores.
 calibration: {}

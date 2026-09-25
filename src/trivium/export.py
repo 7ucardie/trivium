@@ -36,6 +36,8 @@ def labels_for_target(cfg: dict, answers: dict, target: str) -> dict | None:
 def rows_from_log(records: list[dict], cfg: dict, only_rated: bool = False,
                   since: float | None = None) -> tuple[list[dict], dict]:
     feedback = {r["decision"]: r for r in records if r.get("type") == "feedback"}
+    # The terminal app and the dashboard log a separate "pick" when another target is chosen.
+    picks = {r["decision"]: r["target"] for r in records if r.get("type") == "pick"}
     rows: dict[tuple, dict] = {}
     skipped = {"no router answers": 0, "unrated": 0, "before --since": 0, "unknown questions": 0}
     for r in records:
@@ -52,7 +54,9 @@ def rows_from_log(records: list[dict], cfg: dict, only_rated: bool = False,
             skipped["unknown questions"] += 1  # logged under an older question set
             continue
         fb = feedback.get(r["id"])
-        picked = r.get("reason") == "picked with --ask"
+        picked = r.get("reason") == "picked with --ask" or r["id"] in picks
+        if r["id"] in picks:
+            r = {**r, "target": picks[r["id"]]}
         if only_rated and not fb and not picked:
             skipped["unrated"] += 1
             continue

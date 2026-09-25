@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="trivium-token" content="__TRIVIUM_TOKEN__">
+<title>Trivium</title>
+<style>
+:root {
+  --bg:#f6f6f3; --panel:#ffffff; --panel2:#f0efea; --text:#1b1b1a; --dim:#686760; --line:#e2e1db;
+  --accent:#1f6fd1; --accent-ink:#ffffff; --warn:#9a5b00; --good:#1e7a45; --bad:#b3372c; --bar:#c9d9f2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#131312; --panel:#1d1d1b; --panel2:#262624; --text:#ecebe6; --dim:#9d9b94; --line:#33322f;
+    --accent:#6aa6f0; --accent-ink:#0b1320; --warn:#e0a44a; --good:#5cc48a; --bad:#ef7a6f; --bar:#2c4666;
+  }
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+main { max-width:1100px; margin:0 auto; padding:18px 16px 48px; }
+header { display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 14px; margin-bottom:16px; }
+header h1 { font-size:19px; margin:0; }
+.meta { color:var(--dim); font-size:12.5px; }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:14px; }
+label { display:block; color:var(--dim); font-size:12px; margin-bottom:4px; }
+.row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+select, input[type=text], textarea {
+  width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px;
+  padding:8px 10px; font:inherit;
+}
+textarea { min-height:84px; resize:vertical; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; }
+button {
+  font:inherit; border-radius:8px; border:1px solid var(--line); background:var(--panel2); color:var(--text);
+  padding:7px 13px; cursor:pointer;
+}
+button.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
+button:disabled { opacity:.45; cursor:default; }
+button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.hint { color:var(--dim); font-size:12px; }
+.target { font-size:20px; font-weight:700; color:var(--accent); }
+.chips { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+.chip { border-radius:999px; padding:4px 11px; font-size:13px; }
+.chip.on { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+.q { display:grid; grid-template-columns:90px 1fr; gap:6px 10px; align-items:center; margin:8px 0; font-size:13px; }
+.q .name { color:var(--dim); }
+.bars { display:flex; flex-direction:column; gap:3px; }
+.bar { position:relative; background:var(--panel2); border-radius:4px; height:20px; overflow:hidden; }
+.bar span.fill { position:absolute; inset:0 auto 0 0; background:var(--bar); }
+.bar span.txt { position:relative; padding:0 7px; line-height:20px; font-size:12px; white-space:nowrap; }
+.bar.top span.txt { font-weight:600; }
+.warn { color:var(--warn); }
+pre.out {
+  white-space:pre-wrap; word-break:break-word; background:var(--panel2); border-radius:8px; padding:10px;
+  margin:10px 0 0; max-height:420px; overflow:auto; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+.rate button.good { color:var(--good); } .rate button.bad { color:var(--bad); }
+.scroll { overflow-x:auto; }
+table { border-collapse:collapse; width:100%; }
+th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; font-size:13px; }
+th { color:var(--dim); font-weight:500; font-size:12px; }
+tr:last-child td { border-bottom:0; }
+td.prompt { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; min-width:240px; }
+td.num { text-align:right; font-variant-numeric:tabular-nums; }
+.nowrap { white-space:nowrap; } .dim { color:var(--dim); }
+.error { color:var(--bad); margin-top:8px; }
+[hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Trivium</h1>
+    <span class="meta" id="meta">connecting…</span>
+    <span class="meta"><a href="/status" style="color:var(--accent)">status</a></span>
+  </header>
+
+  <section class="panel" aria-labelledby="ask-h">
+    <h2 id="ask-h" hidden>Ask</h2>
+    <label for="project">Project</label>
+    <div class="row" style="margin-bottom:10px">
+      <select id="project" style="flex:1 1 320px"></select>
+      <input type="text" id="project-other" placeholder="/path/to/project" style="flex:1 1 320px" hidden>
+    </div>
+    <label for="prompt">Prompt</label>
+    <textarea id="prompt" placeholder="add retry with exponential backoff to the http client"></textarea>
+    <div class="row" style="margin-top:8px; justify-content:space-between">
+      <span class="hint">⌘/Ctrl + Enter routes it. Nothing runs until you choose.</span>
+      <button class="primary" id="route">Route</button>
+    </div>
+    <div class="error" id="ask-error" role="alert"></div>
+  </section>
+
+  <section class="panel" id="decision" hidden aria-live="polite">
+    <div class="row" style="justify-content:space-between; align-items:baseline">
+      <div><span class="target" id="d-target"></span> <span class="dim" id="d-model"></span></div>
+      <span class="hint" id="d-meta"></span>
+    </div>
+    <div class="warn" id="d-unsure"></div>
+    <div class="chips" id="d-alts" role="radiogroup" aria-label="Target"></div>
+    <div id="d-answers"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="primary" id="open">Open in Terminal</button>
+      <button id="oneshot">One-shot answer here</button>
+      <span class="hint" id="run-hint"></span>
+    </div>
+    <pre class="out" id="out" hidden></pre>
+    <div class="row rate" id="rate" hidden style="margin-top:10px">
+      <span class="dim">Right model?</span>
+      <button class="good" id="rate-good">✓ Good</button>
+      <button class="bad" id="rate-bad">✗ Bad</button>
+      <select id="should" aria-label="Should have gone to" style="width:auto" hidden></select>
+      <span class="hint" id="rate-done"></span>
+    </div>
+    <div class="error" id="run-error" role="alert"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="recent-h">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="recent-h" style="font-size:15px; margin:0 0 8px">Recent decisions</h2>
+      <span class="hint" id="recent-meta"></span>
+    </div>
+    <div class="scroll"><table>
+      <thead><tr><th>When</th><th>Prompt</th><th>Target</th><th>Kind · difficulty · tools</th><th class="num">ms</th><th>Rated</th></tr></thead>
+      <tbody id="recent"></tbody>
+    </table></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const TOKEN = document.querySelector('meta[name="trivium-token"]').content;
+const $ = (id) => document.getElementById(id);
+let targets = [], current = null, chosen = null;
+
+async function api(path, body) {
+  const opts = { headers: { "X-Trivium-Token": TOKEN } };
+  if (body !== undefined) {
+    opts.method = "POST";
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  const r = await fetch(path, opts);
+  if (!r.ok) {
+    let msg = r.status + " " + r.statusText;
+    try { msg = (await r.json()).error || msg; } catch (e) {}
+    throw new Error(msg);
+  }
+  return r;
+}
+
+function el(tag, props, ...children) {
+  const node = document.createElement(tag);
+  Object.assign(node, props || {});
+  for (const c of children) node.append(c);
+  return node;
+}
+
+function ago(ts) {
+  const s = Math.max(0, Math.floor(Date.now() / 1000 - ts));
+  if (s >= 86400) return Math.floor(s / 86400) + "d";
+  if (s >= 3600) return Math.floor(s / 3600) + "h";
+  if (s >= 60) return Math.floor(s / 60) + "m";
+  return s + "s";
+}
+
+async function loadStatus() {
+  try {
+    const s = await (await api("/api/status")).json();
+    const ms = s.route_ms.slice().sort((a, b) => a - b);
+    const p50 = ms.length ? Math.round(ms[Math.floor(ms.length / 2)]) + " ms" : "–";
+    $("meta").textContent = `${s.model} · ${s.backend} · ${s.runtime} · ${s.routes} routed · p50 ${p50}`;
+  } catch (e) { $("meta").textContent = "server not reachable: " + e.message; }
+}
+
+async function loadProjects() {
+  const list = await (await api("/api/projects")).json();
+  const sel = $("project");
+  sel.replaceChildren();
+  for (const p of list) sel.append(el("option", { value: p, textContent: p }));
+  sel.append(el("option", { value: "__other", textContent: "Other folder…" }));
+  try { const saved = localStorage.getItem("trivium.project"); if (saved && list.includes(saved)) sel.value = saved; } catch (e) {}
+}
+
+function projectPath() {
+  return $("project").value === "__other" ? $("project-other").value.trim() : $("project").value;
+}
+
+function targetName(name) {
+  const t = targets.find((x) => x.name === name);
+  return t ? `${t.model}` : name;
+}
+
+async function route() {
+  const prompt = $("prompt").value.trim();
+  $("ask-error").textContent = "";
+  if (!prompt) return;
+  $("route").disabled = true;
+  $("route").textContent = "Routing…";
+  try {
+    current = await (await api("/api/decide", { prompt, cwd: projectPath() })).json();
+    chosen = current.target.name;
+    try { localStorage.setItem("trivium.project", $("project").value); } catch (e) {}
+    showDecision();
+    loadRecent();
+    loadStatus();
+  } catch (e) {
+    $("ask-error").textContent = e.message;
+  } finally {
+    $("route").disabled = false;
+    $("route").textContent = "Route";
+  }
+}
+
+function showDecision() {
+  const d = current;
+  $("decision").hidden = false;
+  $("out").hidden = true; $("out").textContent = "";
+  $("rate").hidden = true; $("rate-done").textContent = ""; $("should").hidden = true;
+  $("run-error").textContent = "";
+  $("d-meta").textContent = `${Math.round(d.route_ms)} ms · ${d.reason}` + (d.repo ? ` · repo ${d.repo}` : "");
+  $("d-unsure").textContent = d.unsure.length ? "Unsure about " + d.unsure.join(", ") + ": sent to the fallback" : "";
+  const alts = $("d-alts");
+  alts.replaceChildren();
+  for (const a of d.alternatives) {
+    const b = el("button", { className: "chip" + (a.name === chosen ? " on" : ""), textContent: `${a.name} ${Math.round(a.p * 100)}%` });
+    b.setAttribute("role", "radio");
+    b.setAttribute("aria-checked", String(a.name === chosen));
+    b.onclick = () => choose(a.name);
+    alts.append(b);
+  }
+  const answers = $("d-answers");
+  answers.replaceChildren();
+  for (const [q, a] of Object.entries(d.answers)) {
+    const ranked = Object.entries(a.probabilities).sort((x, y) => y[1] - x[1]).slice(0, 3);
+    const bars = el("div", { className: "bars" });
+    ranked.forEach(([opt, p], i) => {
+      const fill = el("span", { className: "fill" }); fill.style.width = Math.round(p * 100) + "%";
+      bars.append(el("div", { className: "bar" + (i === 0 ? " top" : "") }, fill,
+        el("span", { className: "txt", textContent: `${opt} ${Math.round(p * 100)}%` })));
+    });
+    answers.append(el("div", { className: "q" }, el("span", { className: "name", textContent: q }), bars));
+  }
+  updateChosen();
+}
+
+function updateChosen() {
+  const t = targets.find((x) => x.name === chosen) || current.target;
+  $("d-target").textContent = chosen;
+  $("d-model").textContent = t.model;
+  for (const b of $("d-alts").children) {
+    const on = b.textContent.startsWith(chosen + " ");
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-checked", String(on));
+  }
+  const local = t.vendor === "local";
+  $("open").disabled = local;
+  $("open").textContent = local ? "Local model: one-shot only" : `Open in ${t.vendor === "claude" ? "Claude Code" : "Codex"}`;
+  $("run-hint").textContent = local ? "" : "opens a Terminal window in the project";
+}
+
+async function choose(name) {
+  if (name === chosen) return;
+  chosen = name;
+  updateChosen();
+  if (name !== current.target.name) {
+    try { await api("/api/pick", { id: current.id, target: name }); loadRecent(); } catch (e) { $("run-error").textContent = e.message; }
+  }
+}
+
+async function run(mode) {
+  $("run-error").textContent = "";
+  const body = { id: current.id, target: chosen, mode };
+  try {
+    if (mode === "terminal") {
+      await api("/api/run", body);
+      $("run-hint").textContent = "opened in a Terminal window";
+    } else {
+      const out = $("out");
+      out.hidden = false; out.textContent = "";
+      $("oneshot").disabled = true;
+      const r = await api("/api/run", body);
+      const reader = r.body.getReader(), dec = new TextDecoder();
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        out.textContent += dec.decode(value, { stream: true });
+        out.scrollTop = out.scrollHeight;
+      }
+    }
+    $("rate").hidden = false;
+  } catch (e) {
+    $("run-error").textContent = e.message;
+  } finally {
+    $("oneshot").disabled = false;
+  }
+}
+
+async function rate(verdict) {
+  const should = verdict === "bad" && $("should").value ? $("should").value : null;
+  if (verdict === "bad" && $("should").hidden) {
+    const sel = $("should");
+    sel.replaceChildren(el("option", { value: "", textContent: "should have been… (optional)" }));
+    for (const t of targets) if (t.name !== chosen) sel.append(el("option", { value: t.name, textContent: `${t.name} · ${t.model}` }));
+    sel.hidden = false;
+    sel.onchange = () => rate("bad");
+    $("rate-done").textContent = "pick what it should have been, or press ✗ again";
+    return;
+  }
+  try {
+    await api("/api/rate", { id: current.id, verdict, should });
+    $("rate-done").textContent = verdict === "good" ? "rated good" : "rated bad" + (should ? `, should be ${should}` : "");
+    $("should").hidden = true;
+    loadRecent();
+  } catch (e) { $("run-error").textContent = e.message; }
+}
+
+async function loadRecent() {
+  try {
+    const rows = await (await api("/api/decisions?limit=25")).json();
+    const body = $("recent");
+    body.replaceChildren();
+    for (const d of rows) {
+      const fb = d.feedback || {};
+      const verdict = (fb.verdict === "good" ? "✓" : fb.verdict === "bad" ? "✗" : "") + (fb.should ? " → " + fb.should : "");
+      const answers = Object.values(d.answers || {}).map((a) => a.choice).join(" · ") || "manual";
+      body.append(el("tr", {},
+        el("td", { className: "dim nowrap", textContent: ago(d.ts) }),
+        el("td", { className: "prompt", textContent: (d.prompt || "").slice(0, 160), title: d.prompt || "" }),
+        el("td", { className: "nowrap", textContent: d.target || "" }),
+        el("td", { className: "nowrap", textContent: answers }),
+        el("td", { className: "num", textContent: d.route_ms ? Math.round(d.route_ms) : "" }),
+        el("td", { className: "nowrap", textContent: verdict })));
+    }
+    $("recent-meta").textContent = rows.length ? "" : "nothing logged yet";
+  } catch (e) { $("recent-meta").textContent = e.message; }
+}
+
+$("route").onclick = route;
+$("prompt").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); route(); } });
+$("project").onchange = () => { $("project-other").hidden = $("project").value !== "__other"; };
+$("open").onclick = () => run("terminal");
+$("oneshot").onclick = () => run("oneshot");
+$("rate-good").onclick = () => rate("good");
+$("rate-bad").onclick = () => rate("bad");
+
+(async () => {
+  try { targets = await (await api("/api/targets")).json(); } catch (e) {}
+  await Promise.all([loadStatus(), loadProjects().catch(() => {}), loadRecent()]);
+  $("prompt").focus();
+  setInterval(() => { if (!document.hidden) { loadStatus(); loadRecent(); } }, 10000);
+})();
+</script>
+</body>
+</html>

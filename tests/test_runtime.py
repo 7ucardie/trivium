@@ -404,7 +404,7 @@ def test_status_page_escapes_and_counts(running_server, tmp_path, monkeypatch):
     log_file.write_text("\n".join(json.dumps(r) for r in records))
     monkeypatch.setattr(log, "LOG", log_file)
     remote.route({"request": "what is 409", "context": "x"}, CFG["questions"])
-    page = urllib.request.urlopen(remote.base + "/").read().decode()
+    page = urllib.request.urlopen(remote.base + "/status").read().decode()
     assert "<script>alert(1)</script>" not in page and "&lt;script&gt;" in page
     assert "1 routed" in page and "codex-sol" in page and "claude-opus" in page
     assert urllib.request.urlopen(remote.base + "/favicon.ico").status == 204
