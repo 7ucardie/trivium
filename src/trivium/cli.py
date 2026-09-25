@@ -11,6 +11,7 @@
   ask rate good|bad [--should T]     label the last decision
   ask eval evals/prompts.jsonl       measure router accuracy on labelled prompts
   ask calibrate evals/prompts.jsonl  fit per-question temperatures from labelled prompts
+  ask export --out mine.jsonl        turn the decision log into labelled prompts to review
   ask targets                        list targets and the config in use
 """
 
@@ -49,11 +50,15 @@ def load_engine(cfg: dict, name: str):
 def backend(cfg: dict, name: str | None = None):
     """The warm server if it is up and runs the backend asked for, else load in-process."""
     name = backend_name(cfg, name)
-    if name == backend_name(cfg):
-        remote = Remote(cfg["router"]["port"])
-        if remote.alive():
+    remote = Remote(cfg["router"]["port"])
+    if remote.alive():
+        if remote.backend == name:
             return remote
-    print(f"trivium: loading the {name} router in-process (run `ask serve` to keep it warm)", file=sys.stderr)
+        # Never apply one backend's calibration to another backend's scores.
+        print(f"trivium: the running server uses the {remote.backend} router, not {name}; "
+              f"loading {name} in-process (restart `ask serve` to switch it)", file=sys.stderr)
+    else:
+        print(f"trivium: loading the {name} router in-process (run `ask serve` to keep it warm)", file=sys.stderr)
     return load_engine(cfg, name)
 
 
@@ -175,10 +180,11 @@ def cmd_serve(argv: list[str]) -> int:
     from .server import serve
 
     cfg = config.load()
-    engine = load_engine(cfg, backend_name(cfg))
+    name = backend_name(cfg)
+    engine = load_engine(cfg, name)
     # Warm up: the first call at a new shape compiles kernels.
     engine.route(state.build("warm up", None, 100), cfg["questions"])
-    serve(engine, cfg["router"]["port"])
+    serve(engine, cfg["router"]["port"], name)
     return 0
 
 
@@ -287,6 +293,33 @@ def cmd_calibrate(argv: list[str]) -> int:
     return 0
 
 
+def cmd_export(argv: list[str]) -> int:
+    from . import export
+
+    parser = argparse.ArgumentParser(prog="ask export", description="Decision log -> labelled prompts.")
+    parser.add_argument("--out", required=True, help="JSONL file for ask eval / ask calibrate")
+    parser.add_argument("--only-rated", action="store_true", help="only decisions rated or picked with --ask")
+    parser.add_argument("--since", help="only decisions on or after this day (YYYY-MM-DD, UTC)")
+    args = parser.parse_args(argv)
+    cfg = config.load()
+    if not log.LOG.exists():
+        print(f"trivium: no decision log at {log.LOG}", file=sys.stderr)
+        return 1
+    records = [json.loads(line) for line in log.LOG.read_text().splitlines() if line.strip()]
+    since = export.since_timestamp(args.since) if args.since else None
+    rows, skipped = export.rows_from_log(records, cfg, args.only_rated, since)
+    export.write(rows, args.out)
+    review = sum(r["needs_review"] for r in rows)
+    kinds = {k: sum(r["label"] == k for r in rows) for k in ("confirmed-target", "inferred-from-feedback", "router")}
+    print(f"trivium: wrote {len(rows)} prompts to {args.out} ({review} need review)", file=sys.stderr)
+    print("  labels: " + ", ".join(f"{k} {v}" for k, v in kinds.items()), file=sys.stderr)
+    if any(skipped.values()):
+        print("  skipped: " + ", ".join(f"{k} {v}" for k, v in skipped.items() if v), file=sys.stderr)
+    print("  check the rows with needs_review before using the file for ask eval or ask calibrate",
+          file=sys.stderr)
+    return 0
+
+
 def cmd_targets(argv: list[str]) -> int:
     cfg = config.load()
     print(f"config: {config.config_path()} · backend: {backend_name(cfg)}")
@@ -303,6 +336,7 @@ COMMANDS = {
     "rate": cmd_rate,
     "eval": cmd_eval,
     "calibrate": cmd_calibrate,
+    "export": cmd_export,
     "targets": cmd_targets,
 }
 

@@ -139,11 +139,24 @@ work would a skilled engineer need?" with time-based options moved difficulty ac
 ask eval evals/prompts.jsonl --show-misses       # accuracy per question and per target
 ask eval evals/prompts.jsonl --backend laya      # same prompts, Laya instead of semif
 ask rate bad --should opus                       # label the last real decision
+ask export --out mine.jsonl --only-rated         # decision log -> labelled prompts to review
 ```
 
 Every decision is appended to `~/.local/state/trivium/decisions.jsonl` with the full probabilities,
 and `ask rate` appends labels. That log is the data for tuning thresholds and wording, and for
 training a router later.
+
+`ask export` turns the log into the same format as `evals/prompts.jsonl`. Feedback only names the
+target a prompt should have gone to, while `ask eval` and `ask calibrate` need an answer per question,
+so every row is pre-filled and labelled with where its answers came from:
+
+- `confirmed-target`: rated good; the router's answers led to the right target.
+- `inferred-from-feedback`: rated bad with `--should`, or re-routed with `--ask`; the answers are the
+  most likely combination, under the router's own scores, that leads to the target you chose.
+- `router`: unrated; the router's answers as they were.
+
+Rows with `needs_review: true` need a human to check the per-question answers before the file is used
+for evaluation or calibration. Decisions made with `--to` never ran the router and are skipped.
 
 `evals/prompts.jsonl` holds 36 prompts I wrote and labelled by hand. Same prompts, same questions,
 same rules, confidence thresholds off, on an Apple M5 Pro (full write-up in
@@ -170,6 +183,14 @@ Replace the file with your own prompts before trusting any threshold.
   rest. The best result on the bundled set, at the cost of a second model in memory.
 
 `laya` and `hybrid` need `uv sync --extra laya`.
+
+`ask serve` reports which backend it runs. If your config names another one, `ask` loads the
+configured backend in-process rather than read one router's scores with another's calibration;
+restart `ask serve` to switch it.
+
+Laya reads about 320 tokens of evidence and cuts the end, so Trivium hands it the repository sentence
+before the prompt. On a 60-line pasted log, that moved Laya's "needs the workspace" score from 0.15
+both inside and outside a repository (the sentence was cut off) to 0.64 inside and 0.09 outside.
 
 ### Calibration
 

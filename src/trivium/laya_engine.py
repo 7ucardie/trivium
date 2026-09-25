@@ -25,6 +25,10 @@ class LayaEngine:
             qid: {"type": "choice", "instructions": q["question"], "criteria": dict(q["options"])}
             for qid, q in questions.items()
         }
+        # Laya reads about 320 tokens of state and cuts the end, so put the short context sentence
+        # first: on a long prompt it is what the tools question depends on.
+        if isinstance(state, dict) and "context" in state:
+            state = {"context": state["context"], **{k: v for k, v in state.items() if k != "context"}}
         started = time.perf_counter()
         with self.lock:
             result = self.agent.predict(state, laya_questions)

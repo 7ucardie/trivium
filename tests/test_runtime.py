@@ -215,3 +215,104 @@ def test_pick_offers_likeliest_targets():
     decision = policy.decide(CFG, answers)
     assert cli.pick(CFG, decision, Tty("2\n")) == policy.alternatives(CFG, answers)[1][0]
     assert cli.pick(CFG, decision, Tty("\n")) is None
+
+
+# --- ask export --------------------------------------------------------------
+
+from trivium import export  # noqa: E402
+
+
+def answers_for(choices, p=0.8):
+    out = {}
+    for q, spec in CFG["questions"].items():
+        options = list(spec["options"])
+        rest = (1 - p) / (len(options) - 1)
+        out[q] = {"choice": choices[q], "p": p,
+                  "probabilities": {o: (p if o == choices[q] else rest) for o in options}}
+    return out
+
+
+def decision(id_, prompt, choices, target, reason="rule 3", ts=100.0, repo="demo"):
+    return {"type": "decision", "id": id_, "ts": ts, "prompt": prompt, "repo": repo,
+            "answers": answers_for(choices), "routed": target, "target": target, "reason": reason}
+
+
+def test_labels_for_target_routes_to_feedback():
+    answers = answers_for(CODE)
+    labels = export.labels_for_target(CFG, answers, "claude-opus")
+    assert policy.decide({**CFG, "min_confidence": {}},
+                         {q: {"choice": o, "p": 1.0} for q, o in labels.items()}).target == "claude-opus"
+    assert labels["difficulty"] == "hard"  # the cheapest change from the router's own answers
+
+
+def test_rows_from_log_labels():
+    records = [
+        decision("a", "add retry", CODE, "codex-sol"),
+        {"type": "feedback", "decision": "a", "verdict": "bad", "should": "claude-opus"},
+        decision("b", "what is 409", QUICK, "local"),
+        {"type": "feedback", "decision": "b", "verdict": "good", "should": None},
+        decision("c", "unrated prompt", QUICK, "local"),
+        decision("d", "picked one", CODE, "claude-sonnet", reason="picked with --ask"),
+        {"type": "decision", "id": "e", "ts": 100.0, "prompt": "manual", "answers": {}, "target": "claude-opus"},
+    ]
+    rows, skipped = export.rows_from_log(records, CFG)
+    by = {r["prompt"]: r for r in rows}
+    assert by["add retry"]["label"] == "inferred-from-feedback" and by["add retry"]["expect"]["difficulty"] == "hard"
+    assert by["what is 409"]["label"] == "confirmed-target" and not by["what is 409"]["needs_review"]
+    assert by["unrated prompt"]["label"] == "router" and by["unrated prompt"]["needs_review"]
+    assert skipped["no router answers"] == 1 and "manual" not in by
+    rated, skipped = export.rows_from_log(records, CFG, only_rated=True)
+    assert {r["prompt"] for r in rated} == {"add retry", "what is 409", "picked one"}
+    assert skipped["unrated"] == 1
+
+
+def test_rows_from_log_dedupes_and_filters_by_day():
+    records = [decision("a", "same", QUICK, "local", ts=10.0), decision("b", "same", CODE, "codex-sol", ts=20.0)]
+    rows, _ = export.rows_from_log(records, CFG)
+    assert len(rows) == 1 and rows[0]["source"]["decision"] == "b"
+    rows, skipped = export.rows_from_log(records, CFG, since=15.0)
+    assert [r["source"]["decision"] for r in rows] == ["b"] and skipped["before --since"] == 1
+
+
+def test_cmd_export_writes_eval_file(monkeypatch, tmp_path, capsys):
+    log_file = tmp_path / "decisions.jsonl"
+    log_file.write_text("\n".join(json.dumps(r) for r in [decision("a", "add retry", CODE, "codex-sol")]))
+    monkeypatch.setattr(cli.log, "LOG", log_file)
+    out = tmp_path / "mine.jsonl"
+    assert cli.cmd_export(["--out", str(out)]) == 0
+    row = json.loads(out.read_text())
+    assert row["expect"] == CODE and row["needs_review"]
+    assert "1 need review" in capsys.readouterr().err
+
+
+# --- backend mismatch ---------------------------------------------------------
+
+def test_backend_mismatch_loads_in_process(monkeypatch):
+    httpd = server.make_server(FakeEngine(), 0, backend="laya")
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        cfg = {**CFG, "router": {**CFG["router"], "port": httpd.server_address[1], "backend": "semif"}}
+        monkeypatch.setattr(cli, "load_engine", lambda cfg, name: f"in-process {name}")
+        assert cli.backend(cfg) == "in-process semif"
+        matched = cli.backend({**cfg, "router": {**cfg["router"], "backend": "laya"}})
+        assert isinstance(matched, server.Remote) and matched.backend == "laya"
+    finally:
+        httpd.shutdown()
+
+
+# --- Laya reads the context first ---------------------------------------------
+
+def test_laya_gets_context_first(monkeypatch):
+    seen = {}
+
+    class Agent:
+        def predict(self, state, questions):
+            seen["keys"] = list(state)
+            return {"answers": {q: {"probabilities": {o: 1 / len(v["criteria"]) for o in v["criteria"]}}
+                                for q, v in questions.items()}}
+
+    monkeypatch.setitem(sys.modules, "laya", types.SimpleNamespace(load=lambda *a, **k: Agent()))
+    from trivium.laya_engine import LayaEngine
+
+    LayaEngine({}).route({"request": "x" * 5000, "context": "inside repo"}, CFG["questions"])
+    assert seen["keys"] == ["context", "request"]

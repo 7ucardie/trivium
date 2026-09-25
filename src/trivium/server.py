@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 HOST = "127.0.0.1"
 
 
-def make_server(engine, port: int) -> HTTPServer:
+def make_server(engine, port: int, backend: str = "semif") -> HTTPServer:
     class Handler(BaseHTTPRequestHandler):
         def _json(self, code: int, body: dict) -> None:
             data = json.dumps(body).encode()
@@ -25,7 +25,8 @@ def make_server(engine, port: int) -> HTTPServer:
         def do_GET(self):
             if self.path != "/health":
                 return self._json(404, {"error": "not found"})
-            self._json(200, {"model": engine.metadata["source"], "load_seconds": engine.load_seconds})
+            self._json(200, {"model": engine.metadata["source"], "backend": backend,
+                              "load_seconds": engine.load_seconds})
 
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -62,8 +63,8 @@ def _chain(first: str, rest):
     yield from rest
 
 
-def serve(engine, port: int) -> None:
-    httpd = make_server(engine, port)
+def serve(engine, port: int, backend: str = "semif") -> None:
+    httpd = make_server(engine, port, backend)
     print(f"trivium: serving {engine.metadata['source']} on http://{HOST}:{port} "
           f"(loaded in {engine.load_seconds:.1f}s)", file=sys.stderr)
     try:
@@ -78,11 +79,15 @@ class Remote:
     def __init__(self, port: int):
         self.base = f"http://{HOST}:{port}"
         self.metadata = {"source": "remote"}
+        self.backend = None
 
     def alive(self) -> bool:
         try:
             with urllib.request.urlopen(f"{self.base}/health", timeout=0.5) as r:
-                self.metadata = {"source": json.load(r)["model"]}
+                health = json.load(r)
+                self.metadata = {"source": health["model"]}
+                # Servers from before this field existed could only run semif.
+                self.backend = health.get("backend", "semif")
                 return r.status == 200
         except (urllib.error.URLError, OSError):
             return False
