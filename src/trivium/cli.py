@@ -75,7 +75,7 @@ def raw_route(cfg: dict, engine, prompt: str, repo: str | None) -> tuple[dict, f
 
 def route(cfg: dict, engine, prompt: str, repo: str | None, name: str) -> tuple[policy.Decision, float]:
     probs, elapsed = raw_route(cfg, engine, prompt, repo)
-    answers = policy.summarize(probs, config.temperatures(cfg, name))
+    answers = policy.summarize(probs, config.temperatures(cfg, name), config.option_weights(cfg))
     return policy.decide(cfg, answers), elapsed
 
 
@@ -274,7 +274,7 @@ def cmd_eval(argv: list[str]) -> int:
     for row in rows:
         probs, elapsed = raw_route(cfg, engine, row["prompt"], row.get("repo"))
         expected = policy.decide(cfg, {q: {"choice": c, "p": 1.0} for q, c in row["expect"].items()}).target
-        scored.append((row, policy.summarize(probs, temps), expected, elapsed))
+        scored.append((row, policy.summarize(probs, temps, config.option_weights(cfg)), expected, elapsed))
     hits = {q: 0 for q in cfg["questions"]}
     targets_hit, unsure, misses = 0, 0, []
     for row, answers, expected, _ in scored:

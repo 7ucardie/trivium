@@ -232,6 +232,10 @@ ask eval evals/calibration-100.jsonl --split test     # the held-out 28
 ask calibrate evals/calibration-100.jsonl --split train
 ```
 
+`evals/difficulty-120.jsonl` is a third set of 119 prompts written around the difficulty boundaries,
+used to test fixes for the router's main weakness: it calls short moderate requests trivial. Rewording
+the question made things worse; weighting the options helped (see Option weights below).
+
 `evals/prompts.jsonl` holds 36 prompts I wrote and labelled by hand earlier. Same prompts, same questions,
 same rules, confidence thresholds off, on an Apple M5 Pro (full write-up in
 [`evals/results/2026-09-23.md`](evals/results/2026-09-23.md)):
@@ -328,6 +332,22 @@ tools answers are right 35 times in 36 yet reported at a median confidence of 0.
 the allowed range. Second, re-choose `min_confidence` after calibrating. Temperatures change the
 scale the thresholds are read on: applying semif's fitted temperatures with thresholds tuned on raw
 scores sent more prompts to the fallback and lowered the right-target rate from 80.6% to 75.0%.
+
+### Option weights
+
+The router under-picks "moderate" difficulty: short requests like "add a --verbose flag" or "review my
+staged changes" come out trivial and go to a model that is too weak. `option_weights` corrects that by
+multiplying an option's score before anything else:
+
+```yaml
+option_weights:
+  difficulty: {moderate: 3, hard: 2}
+```
+
+On 119 held-out prompts this raised difficulty accuracy from 79.0% to 85.7% (moderate from 44% to 80%),
+right target from 73.9% to 78.2%, and cut the prompts sent to a model that was too weak from 13 to 7.
+It ships off because the gain was not statistically significant on that set (paired test p = 0.30,
+10 prompts fixed against 5 broken). Details: [evals/results/2026-09-26-difficulty.md](evals/results/2026-09-26-difficulty.md).
 
 ### Laya backend
 

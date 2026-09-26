@@ -66,6 +66,14 @@ projects: []
 calibration:
   semif: {kind: 0.9549, difficulty: 1.2056, tools: 2.159}
 
+# Optional prior weights per option, applied to the router's scores before anything else. The router
+# under-picks "moderate": on 119 held-out prompts (evals/difficulty-120.jsonl) the weights below raised
+# difficulty accuracy from 79.0% to 85.7%, right target from 73.9% to 78.2%, and cut the prompts sent
+# to a model that was too weak from 13 to 7. Off by default because the gain was not statistically
+# significant on that set (paired test p = 0.30); uncomment to use them.
+option_weights: {}
+#  difficulty: {moderate: 3, hard: 2}
+
 # Answers below these confidences send the prompt to `fallback`. Empty by default: on the 136 labelled
 # prompts every floor from 0.3 to 0.8 routed fewer prompts right and did not reduce the prompts sent to
 # a model that was too weak. Set values here, or router.ask_when_unsure, if you prefer to be asked.

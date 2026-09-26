@@ -26,12 +26,23 @@ def temper(probs: dict, temperature: float) -> dict:
     return {o: v / total for o, v in powered.items()}
 
 
-def summarize(results: dict, temperatures: dict | None = None) -> dict:
-    """{qid: {option: p}} -> {qid: {"choice", "p", "probabilities"}}, after optional calibration."""
-    temperatures = temperatures or {}
+def weigh(probs: dict, weights: dict) -> dict:
+    """Multiply options by prior weights and renormalise; a correction for an option the router
+    systematically under-picks. Missing options keep weight 1."""
+    if not weights:
+        return dict(probs)
+    scaled = {o: p * weights.get(o, 1.0) for o, p in probs.items()}
+    total = sum(scaled.values()) or 1.0
+    return {o: v / total for o, v in scaled.items()}
+
+
+def summarize(results: dict, temperatures: dict | None = None, weights: dict | None = None) -> dict:
+    """{qid: {option: p}} -> {qid: {"choice", "p", "probabilities"}}, after optional option weights
+    (applied to the raw scores) and calibration."""
+    temperatures, weights = temperatures or {}, weights or {}
     out = {}
     for qid, raw in results.items():
-        probs = temper(raw, temperatures.get(qid, 1.0))
+        probs = temper(weigh(raw, weights.get(qid, {})), temperatures.get(qid, 1.0))
         choice = max(probs, key=probs.get)
         out[qid] = {"choice": choice, "p": probs[choice], "probabilities": probs}
     return out

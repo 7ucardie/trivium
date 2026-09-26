@@ -86,3 +86,16 @@ def test_config_rejects_unknown_option():
     bad = {**CFG, "rules": [{"when": {"kind": "poetry"}, "to": "local"}]}
     with pytest.raises(ValueError, match="no option"):
         config.validate(bad)
+
+
+def test_option_weights_shift_the_choice():
+    raw = {"difficulty": {"trivial": 0.5, "moderate": 0.3, "hard": 0.2}}
+    assert policy.summarize(raw)["difficulty"]["choice"] == "trivial"
+    weighted = policy.summarize(raw, weights={"difficulty": {"moderate": 3, "hard": 2}})
+    assert weighted["difficulty"]["choice"] == "moderate"
+    assert sum(weighted["difficulty"]["probabilities"].values()) == pytest.approx(1.0)
+
+
+def test_config_rejects_bad_weights():
+    with pytest.raises(ValueError, match="option_weights"):
+        config.validate({**CFG, "option_weights": {"difficulty": {"epic": 2}}})

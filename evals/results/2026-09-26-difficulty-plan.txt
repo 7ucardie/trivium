@@ -1,0 +1,7 @@
+Written 2026-09-26T20:38:54Z, before any wording is scored on evals/difficulty-120.jsonl.
+Primary comparison on difficulty-120 (labels settled before scoring):
+  A = current difficulty wording, no weights
+  B = current difficulty wording, option weights moderate x3, hard x2 (chosen on the 136 dev prompts)
+Adopt B only if: McNemar exact test on right-target (paired, A vs B) p < 0.05 in B's favour,
+and B does not send more prompts to a model that is too weak than A.
+Secondary, descriptive only (not eligible): V4/V5 wordings with and without weights; B with x2/x1.5.

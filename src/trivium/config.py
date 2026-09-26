@@ -56,6 +56,11 @@ def write_calibration(backend: str, temperatures: dict) -> Path:
     return path
 
 
+def option_weights(cfg: dict) -> dict:
+    """{question: {option: weight}} from `option_weights`; empty means none."""
+    return cfg.get("option_weights") or {}
+
+
 def temperatures(cfg: dict, backend: str) -> dict:
     """Per-question temperatures fitted by `ask calibrate` for this backend; empty means raw."""
     return (cfg.get("calibration") or {}).get(backend) or {}
@@ -96,6 +101,12 @@ def validate(cfg: dict) -> None:
             for option in want if isinstance(want, list) else [want]:
                 if option not in questions[qid]["options"]:
                     raise ValueError(f"rule {i}: {qid} has no option {option!r}")
+    for qid, weights in (cfg.get("option_weights") or {}).items():
+        if qid not in questions:
+            raise ValueError(f"option_weights: unknown question {qid!r}")
+        for option, w in (weights or {}).items():
+            if option not in questions[qid]["options"] or not (isinstance(w, (int, float)) and w > 0):
+                raise ValueError(f"option_weights.{qid}.{option}: needs a known option and a positive number")
     for qid in cfg.get("min_confidence", {}):
         if qid not in questions:
             raise ValueError(f"min_confidence: unknown question {qid!r}")
