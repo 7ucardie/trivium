@@ -120,7 +120,8 @@ For the `torch` or `llamacpp` runtime, set `router.runtime` in your config (see
 `bartowski/Qwen_Qwen3.5-4B-GGUF` Q4_K_M file on first use, or reads a local file from `router.gguf`.
 
 `ask` works without `ask serve`, but then it loads the model for every prompt, which takes several
-seconds. `ask service install` starts the server at every login (macOS only).
+seconds. `ask service install` starts the server at every login. On Windows, follow
+[Run on Windows](docs/how-to/run-on-windows.md).
 
 ## Use
 
@@ -140,7 +141,7 @@ Every command and flag is in the [CLI reference](docs/reference/cli.md).
 The docs follow [Diátaxis](https://diataxis.fr/); start at [docs/README.md](docs/README.md).
 
 - **Tutorial:** [Getting started](docs/tutorials/getting-started.md)
-- **How-to:** [Use the terminal app](docs/how-to/terminal-app.md) · [Use the web dashboard](docs/how-to/web-dashboard.md) · [Measure and improve the router](docs/how-to/measure-the-router.md) · [Calibrate the router](docs/how-to/calibrate.md)
+- **How-to:** [Use the terminal app](docs/how-to/terminal-app.md) · [Use the web dashboard](docs/how-to/web-dashboard.md) · [Measure and improve the router](docs/how-to/measure-the-router.md) · [Calibrate the router](docs/how-to/calibrate.md) · [Run on Windows](docs/how-to/run-on-windows.md)
 - **Reference:** [CLI](docs/reference/cli.md) · [Configuration](docs/reference/configuration.md) · [Runtimes and backends](docs/reference/runtimes-and-backends.md) · [JSON API](docs/reference/api.md) · [Status and limits](docs/reference/stability.md)
 - **Explanation:** [How Trivium works](docs/explanation/how-trivium-works.md)
 
@@ -155,7 +156,7 @@ The current limits are in [Status and limits](docs/reference/stability.md).
 
 - **A trained router:** the decision log is the data for training one.
 - **`torch` on a CUDA GPU:** tested on Apple MPS only.
-- **`ask service` beyond macOS:** it uses launchd.
+- **`ask service` on Linux:** it uses launchd on macOS and a scheduled task on Windows.
 
 **Not planned:**
 

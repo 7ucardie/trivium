@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import log, session
+from . import launch, log, session
 
 MAIN_TARGETS = ["local", "claude-haiku", "claude-sonnet", "claude-opus", "claude-fable",
                 "codex-luna", "codex-sol", "codex-astra"]
@@ -38,6 +38,14 @@ def warn(t: str) -> str: return _color("33", t)
 
 def read_key() -> str:
     """One keypress without Enter. Returns '\\n' for Enter and 'esc' for Escape."""
+    if os.name == "nt":
+        import msvcrt
+
+        ch = msvcrt.getwch()
+        if ch in "\x00\xe0":  # an arrow or function key sends two codes; drop both
+            msvcrt.getwch()
+            return ""
+        return {"\r": "\n", "\x1b": "esc", "\x04": "x", "\x03": "x"}.get(ch, ch)
     import termios
     import tty
 
@@ -67,7 +75,7 @@ def read_line(prompt: str, prefill: str = "") -> str:
 def run_interactive(cmd: list[str], cwd: str) -> int:
     """Run claude or codex in this terminal and wait; the TTY is inherited, so it behaves as usual."""
     try:
-        return subprocess.run(cmd, cwd=cwd).returncode
+        return subprocess.run(launch.resolve(cmd), cwd=cwd).returncode
     except FileNotFoundError:
         print(warn(f"  `{cmd[0]}` is not on PATH"))
         return 127

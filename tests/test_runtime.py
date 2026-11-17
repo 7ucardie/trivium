@@ -2,6 +2,7 @@
 
 import io
 import json
+import os
 import pathlib
 import plistlib
 import re
@@ -11,7 +12,9 @@ import types
 
 import pytest
 
-from trivium import calibrate, cli, config, policy, server, service
+from trivium import calibrate, cli, config, launch, policy, server, service
+
+REAL_RESOLVE = launch.resolve  # conftest replaces it for every test
 
 CFG = config.load(config.config_path())
 
@@ -99,6 +102,7 @@ def test_local_answer_streams(fake_cli, capsys):
     assert "local answer" in capsys.readouterr().out
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Windows has no exec; it runs the CLI and waits")
 def test_interactive_launch_uses_execvp(fake_cli, monkeypatch):
     seen = {}
     monkeypatch.setattr(cli.os, "execvp", lambda f, argv: seen.update(argv=argv))
@@ -203,6 +207,30 @@ def test_service_plist(monkeypatch):
     assert body["ProgramArguments"] == ["/usr/local/bin/ask", "serve"]
     assert body["KeepAlive"] == {"SuccessfulExit": False}
     assert body["EnvironmentVariables"]["HF_HUB_OFFLINE"] == "1"
+
+
+def test_service_windows_script(monkeypatch):
+    monkeypatch.setattr(service.shutil, "which", lambda name: r"C:\bin\ask.exe")
+    monkeypatch.setenv("TRIVIUM_CONFIG", r"C:\cfg\targets.yaml")
+    lines = service.win_script().split("\r\n")
+    assert 'set "HF_HUB_OFFLINE=1"' in lines and r'set "TRIVIUM_CONFIG=C:\cfg\targets.yaml"' in lines
+    assert lines[-2].startswith(r'"C:\bin\ask.exe" serve >> "') and lines[-2].endswith('trivium.log" 2>&1')
+
+
+def test_resolve_runs_an_npm_shim_without_cmd_exe(tmp_path, monkeypatch):
+    """A prompt must never pass through cmd.exe: resolve() starts the shim's node script itself."""
+    shim = tmp_path / "codex.cmd"
+    shim.write_text(r'"%_prog%"  "%dp0%\node_modules\@openai\codex\bin\codex.js" %*')
+    where = {"codex": str(shim), "node": r"C:\node\node.exe", "claude": r"C:\bin\claude.EXE"}
+    monkeypatch.setattr(launch, "WINDOWS", True)
+    monkeypatch.setattr(launch.shutil, "which", where.get)
+    nasty = 'x" & calc'
+    assert REAL_RESOLVE(["codex", "-m", "m", nasty]) == [
+        r"C:\node\node.exe", str(tmp_path / r"node_modules\@openai\codex\bin\codex.js"), "-m", "m", nasty]
+    assert REAL_RESOLVE(["claude", "-p"]) == [r"C:\bin\claude.EXE", "-p"]
+    assert REAL_RESOLVE(["missing"]) == ["missing"]
+    shim.write_text("@echo something else")
+    assert REAL_RESOLVE(["codex"]) == ["codex"]
 
 
 def test_config_rejects_bad_calibration():

@@ -26,7 +26,8 @@ route to Codex gpt-6-sol becomes Claude Sonnet.
 seconds. To start the server at every login instead of by hand:
 
 ```sh
-ask service install        # a launchd agent that runs `ask serve`; logs to ~/Library/Logs/trivium.log
+ask service install        # macOS: a launchd agent, logs to ~/Library/Logs/trivium.log
+                           # Windows: a logon task, logs to %LOCALAPPDATA%	rivium	rivium.log
 ask service status
 ask service uninstall
 ```

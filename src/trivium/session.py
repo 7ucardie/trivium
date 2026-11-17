@@ -100,7 +100,7 @@ class Router:
         yield "status", f"starting {cmd[0]} ({info['model']})"
         errored = False
         try:
-            with subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            with subprocess.Popen(launch.resolve(cmd), cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                   stderr=subprocess.STDOUT, text=True, bufsize=1) as proc:
                 for kind, text in parse(proc.stdout):
                     errored = errored or kind == "error"
@@ -112,11 +112,18 @@ class Router:
         if code and not errored:
             yield "error", f"{cmd[0]} exited with code {code}"
 
-    def open_in_terminal(self, target: str, prompt: str, cwd: str) -> Path:
-        """Open a new terminal window running the interactive CLI for this target in cwd (macOS)."""
+    def open_in_terminal(self, target: str, prompt: str, cwd: str) -> Path | None:
+        """Open a new terminal window running the interactive CLI for this target in cwd."""
         cmd = self.command(target, prompt, one_shot=False)
         if cmd is None:
             raise ValueError("the local model has no interactive session; use a one-shot answer")
+        if os.name == "nt":
+            # A new console window; the arguments go straight to the program, so no script to quote.
+            try:
+                subprocess.Popen(launch.resolve(cmd), cwd=cwd, creationflags=subprocess.CREATE_NEW_CONSOLE)
+            except FileNotFoundError:
+                raise RuntimeError(f"`{cmd[0]}` is not on PATH") from None
+            return None
         script = launch_script(cmd, cwd)
         app = self.cfg["router"].get("terminal_app", "Terminal")
         subprocess.run(["open", "-a", app, str(script)], check=True)

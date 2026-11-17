@@ -1,9 +1,15 @@
 """Never let a test start a real claude, codex or open. One did once: a one-shot test ran
 `codex exec` against this repo and it patched two files. Tests that need those commands fake them."""
 
+import os
 import subprocess
+from pathlib import Path
 
 import pytest
+
+# Test the shipped config, not the one in the developer's ~/.config/trivium.
+os.environ["TRIVIUM_CONFIG"] = str(Path(__file__).parent.parent / "src" / "trivium" / "targets.yaml")
+os.environ["TRIVIUM_CALIBRATION"] = str(Path(__file__).parent / "no-calibration.yaml")
 
 REAL = {"Popen": subprocess.Popen, "run": subprocess.run}
 FORBIDDEN = {"claude", "codex", "open"}
@@ -25,8 +31,10 @@ def _guard(name):
 def no_real_agent_clis(monkeypatch):
     monkeypatch.setattr(subprocess, "Popen", _guard("Popen"))
     monkeypatch.setattr(subprocess, "run", _guard("run"))
-    import os
+    from trivium import launch
 
+    # On Windows resolve() turns `claude` into a full path, which would slip past the guard above.
+    monkeypatch.setattr(launch, "resolve", lambda cmd: cmd)
     real_exec = os.execvp
 
     def guarded_exec(file, argv):

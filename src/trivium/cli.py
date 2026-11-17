@@ -10,7 +10,7 @@
   ask why "..."                      show the decision without running anything
   ask why --json "..."               the decision as JSON, for scripts and editors
   ask serve                          keep the router model warm (recommended)
-  ask service install|uninstall|status   run `ask serve` at login with launchd
+  ask service install|uninstall|status   run `ask serve` at login (launchd, or a Windows task)
   ask rate good|bad [--should T]     label the last decision
   ask eval evals/prompts.jsonl       measure router accuracy on labelled prompts
   ask calibrate evals/prompts.jsonl  fit per-question temperatures from labelled prompts
@@ -96,7 +96,13 @@ def pick(cfg: dict, decision: policy.Decision, tty=None) -> str | None:
     options = policy.alternatives(cfg, decision.answers)[:3]
     if tty is None:
         try:
-            tty = open("/dev/tty", "r+")
+            if os.name == "nt":
+                import io
+
+                tty = io.TextIOWrapper(io.BufferedRWPair(open("CONIN$", "rb"), open("CONOUT$", "wb")),
+                                       line_buffering=True)
+            else:
+                tty = open("/dev/tty", "r+")
         except OSError:
             return None  # no terminal (a pipe or a script): keep the router's decision
     with tty:
@@ -188,6 +194,10 @@ def run(argv: list[str]) -> int:
         return 0 if got else 1
     cmd = launch.argv(target, prompt, one_shot=False)
     try:
+        if os.name == "nt":  # execvp does not replace the process on Windows; run it and wait
+            import subprocess
+
+            return subprocess.run(launch.resolve(cmd)).returncode
         os.execvp(cmd[0], cmd)
     except FileNotFoundError:
         print(f"trivium: `{cmd[0]}` is not on PATH", file=sys.stderr)
@@ -206,7 +216,8 @@ def cmd_serve(argv: list[str]) -> int:
         print(f"trivium: a server is already running on port {port} "
               f"(backend {running.backend}, {running.metadata['source']}).\n"
               f"  Stop it first: `ask service uninstall` if it runs as a service, otherwise "
-              f"`kill $(lsof -tiTCP:{port} -sTCP:LISTEN)`.", file=sys.stderr)
+              f"`kill $(lsof -tiTCP:{port} -sTCP:LISTEN)` (Windows: end its `ask.exe` in Task Manager).",
+              file=sys.stderr)
         return 1
     if not server.port_free(port):
         print(f"trivium: port {port} is in use by another program; set router.port to a free port.",

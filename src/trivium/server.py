@@ -183,7 +183,7 @@ def make_server(engine, port: int, backend: str = "semif", cfg: dict | None = No
                         raise ValueError(f"unknown target {target!r}")
                     if body.get("mode") == "terminal":
                         script = router.open_in_terminal(target, d["prompt"], d["cwd"])
-                        return self._json(200, {"opened": True, "target": target, "script": str(script)})
+                        return self._json(200, {"opened": True, "target": target, "script": script and str(script)})
                     count("generates")
                     # One JSON object per line: {"kind": "text" | "status" | "error", "text": ...}
                     events = (json.dumps({"kind": k, "text": t}) + "\n"

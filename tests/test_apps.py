@@ -1,6 +1,7 @@
 """The shared session core and the terminal app, with a fake engine and scripted keys."""
 
 import json
+import os
 import subprocess
 
 import pytest
@@ -126,6 +127,8 @@ def api(router, tmp_path, monkeypatch):
     monkeypatch.setenv("TRIVIUM_TOKEN_FILE", str(tmp_path / "api-token"))
     opened = []
     monkeypatch.setattr(session.subprocess, "run", lambda cmd, check=False: opened.append(cmd))  # no real `open`
+    # Windows opens a console with Popen instead of `open -a Terminal`.
+    monkeypatch.setattr(session.subprocess, "Popen", lambda cmd, **kw: opened.append(cmd))
     httpd = server.make_server(router.engine, 0, backend="semif", cfg=CFG)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{httpd.server_address[1]}"
@@ -154,7 +157,8 @@ def test_api_decide_pick_run_rate(api):
     assert code == 200 and d["target"]["name"] == "codex-sol"
     assert call("/api/pick", {"id": d["id"], "target": "opus"})[1]["name"] == "claude-opus"
     code, out = call("/api/run", {"id": d["id"], "target": "claude-opus", "mode": "terminal"})
-    assert code == 200 and opened[0][:3] == ["open", "-a", "Terminal"]
+    assert code == 200 and opened[0][:3] == (
+        ["claude", "--model", "claude-opus-5-5"] if os.name == "nt" else ["open", "-a", "Terminal"])
     code, _ = call("/api/rate", {"id": d["id"], "verdict": "bad", "should": "sonnet"})
     kinds = [r["type"] for r in records()]
     assert code == 200 and kinds[-3:] == ["decision", "pick", "feedback"]
@@ -185,4 +189,5 @@ def test_dashboard_embeds_token_and_forbids_framing(api):
     call, _, _ = api
     code, page = call("/", token=False)
     assert code == 200 and security.token() in page and "__TRIVIUM_TOKEN__" not in page
-    assert (security.token_path().stat().st_mode & 0o077) == 0  # owner-only file
+    if os.name != "nt":  # Windows has no mode bits; the profile folder's ACL protects the file
+        assert (security.token_path().stat().st_mode & 0o077) == 0  # owner-only file
