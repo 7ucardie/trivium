@@ -114,6 +114,14 @@ def _win_stop() -> None:
         capture_output=True, text=True).stdout.strip()
     if pid.isdigit():
         subprocess.run(["taskkill", "/PID", pid, "/T", "/F"], capture_output=True)
+        import time
+
+        from .server import port_free
+
+        for _ in range(50):  # `ask serve` refuses to start while the port is still closing
+            if port_free(port):
+                break
+            time.sleep(0.1)
 
 
 def _win_install() -> int:

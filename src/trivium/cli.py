@@ -66,15 +66,31 @@ def backend(cfg: dict, name: str | None = None):
     return load_engine(cfg, name)
 
 
-def raw_route(cfg: dict, engine, prompt: str, repo: str | None) -> tuple[dict, float]:
+def raw_route(cfg: dict, engine, prompt: str, repo: str | None, cache_as: str | None = None) -> tuple[dict, float]:
+    """The router's scores. With cache_as (a backend name), scores are kept on disk and reused for the
+    same evidence, questions and router settings; rules, calibration and weights still apply afterwards."""
     evidence = state.build(prompt, repo, cfg["router"]["max_prompt_chars"])
     started = time.perf_counter()
+    cached = None
+    if cache_as:
+        import hashlib
+
+        key = json.dumps([evidence, cfg["questions"], cfg["router"], cache_as], sort_keys=True)
+        # shortcut: one small file per distinct prompt and never removed, add eviction if the folder grows large
+        cached = log.LOG.parent / "route-cache" / (hashlib.sha256(key.encode()).hexdigest() + ".json")
+        try:
+            return json.loads(cached.read_text()), time.perf_counter() - started
+        except (OSError, ValueError):
+            pass  # not cached yet, or a file cut short: ask the router
     probs, _ = engine.route(evidence, cfg["questions"])
+    if cached:
+        cached.parent.mkdir(parents=True, exist_ok=True)
+        cached.write_text(json.dumps(probs))
     return probs, time.perf_counter() - started
 
 
 def route(cfg: dict, engine, prompt: str, repo: str | None, name: str) -> tuple[policy.Decision, float]:
-    probs, elapsed = raw_route(cfg, engine, prompt, repo)
+    probs, elapsed = raw_route(cfg, engine, prompt, repo, name if cfg["router"].get("cache") else None)
     answers = policy.summarize(probs, config.temperatures(cfg, name), config.option_weights(cfg))
     return policy.decide(cfg, answers), elapsed
 

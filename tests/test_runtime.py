@@ -209,6 +209,21 @@ def test_service_plist(monkeypatch):
     assert body["EnvironmentVariables"]["HF_HUB_OFFLINE"] == "1"
 
 
+def test_route_cache_is_an_option(monkeypatch, tmp_path):
+    from trivium import log
+
+    monkeypatch.setattr(log, "LOG", tmp_path / "decisions.jsonl")
+    engine = FakeEngine({"409": QUICK})
+    cached = {**CFG, "router": {**CFG["router"], "cache": True}}
+    first, _ = cli.route(cached, engine, "what does 409 mean", None, "semif")
+    again, _ = cli.route(cached, engine, "what does 409 mean", None, "semif")
+    assert len(engine.calls) == 1 and again.answers == first.answers and again.target == first.target
+    cli.route(cached, engine, "what does 409 mean", "some-repo", "semif")  # other evidence: not reused
+    cli.route(CFG, engine, "what does 409 mean", None, "semif")            # cache off: always asks
+    cli.route(CFG, engine, "what does 409 mean", None, "semif")
+    assert len(engine.calls) == 4
+
+
 def test_service_windows_script(monkeypatch):
     monkeypatch.setattr(service.shutil, "which", lambda name: r"C:\bin\ask.exe")
     monkeypatch.setenv("TRIVIUM_CONFIG", r"C:\cfg\targets.yaml")
