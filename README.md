@@ -1,6 +1,59 @@
-# Trivium
+<p align="center"><img src="assets/trivium.svg" width="160" alt="Trivium logo"></p>
 
-[![test](https://github.com/7ucardie/trivium/actions/workflows/test.yml/badge.svg)](https://github.com/7ucardie/trivium/actions/workflows/test.yml)
+<h1 align="center">Trivium</h1>
+
+<p align="center">
+  <!-- CI -->
+  <a href="https://github.com/7ucardie/trivium/actions/workflows/test.yml">
+    <img alt="CI" src="https://img.shields.io/github/actions/workflow/status/7ucardie/trivium/test.yml?branch=main&label=CI&style=for-the-badge">
+  </a>
+  <!-- Version -->
+  <a href="https://github.com/7ucardie/trivium/releases">
+    <img alt="Version" src="https://img.shields.io/github/v/release/7ucardie/trivium?color=673AB7&label=version&style=for-the-badge">
+  </a>
+  <!-- License -->
+  <a href="https://github.com/7ucardie/trivium/blob/main/LICENSE">
+    <img alt="License" src="https://img.shields.io/badge/license-MIT-009688.svg?style=for-the-badge">
+  </a>
+  <!-- Docs -->
+  <a href="https://diataxis.fr/">
+    <img alt="Documentation: Diátaxis" src="https://img.shields.io/badge/docs-Di%C3%A1taxis-009485?logo=readthedocs&logoColor=white&style=for-the-badge">
+  </a>
+</p>
+<p align="center">
+  <!-- Where Trivium sends a prompt; see docs/explanation/how-trivium-works.md -->
+  <a href="docs/explanation/how-trivium-works.md#default-routing">
+    <img alt="Routes to Claude Code" src="https://img.shields.io/badge/routes%20to-Claude%20Code-D97757?logo=claude&logoColor=white&style=for-the-badge">
+  </a>
+  <a href="docs/explanation/how-trivium-works.md#default-routing">
+    <img alt="Routes to Codex" src="https://img.shields.io/badge/routes%20to-Codex-000000?style=for-the-badge">
+  </a>
+  <a href="docs/explanation/how-trivium-works.md#default-routing">
+    <img alt="Routes to a local Qwen" src="https://img.shields.io/badge/routes%20to-local%20Qwen-615CED?style=for-the-badge">
+  </a>
+</p>
+<p align="center">
+  <!-- Issues -->
+  <a href="https://github.com/7ucardie/trivium/issues">
+    <img alt="GitHub Issues" src="https://img.shields.io/github/issues/7ucardie/trivium?color=F44336&style=for-the-badge">
+  </a>
+  <!-- Stars -->
+  <a href="https://github.com/7ucardie/trivium/stargazers">
+    <img alt="GitHub Stars" src="https://img.shields.io/github/stars/7ucardie/trivium?color=FFEB3B&style=for-the-badge">
+  </a>
+  <!-- Forks -->
+  <a href="https://github.com/7ucardie/trivium/network">
+    <img alt="GitHub Forks" src="https://img.shields.io/github/forks/7ucardie/trivium?color=2196F3&style=for-the-badge">
+  </a>
+</p>
+<p align="center">
+  <!-- Stack -->
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.10%E2%80%933.13-3776AB.svg?logo=python&logoColor=white&style=for-the-badge">
+  <img alt="uv" src="https://img.shields.io/badge/uv-managed-DE5FE9.svg?logo=uv&logoColor=white&style=for-the-badge">
+  <img alt="MLX" src="https://img.shields.io/badge/MLX-default%20runtime-000000.svg?logo=apple&logoColor=white&style=for-the-badge">
+  <img alt="Qwen3.5-4B" src="https://img.shields.io/badge/Qwen3.5--4B-router-615CED.svg?style=for-the-badge">
+  <img alt="macOS" src="https://img.shields.io/badge/macOS-Apple%20Silicon-000000.svg?logo=apple&logoColor=white&style=for-the-badge">
+</p>
 
 A local System-1 router that sends each prompt to the right model: a local Qwen, Claude Code, or Codex.
 
@@ -20,55 +73,29 @@ $ ask -p "what does HTTP 409 mean"
 **HTTP 409 Conflict** is a server response status code indicating ...
 ```
 
-## Why
+<p align="center"><img src="assets/screenshot.png" alt="The Trivium dashboard routing a prompt to Codex, with the probability of every answer and a table of recent decisions"></p>
+<p align="center"><sub>Demo data, dark theme.</sub></p>
 
-Claude Code and Codex both choose their model when they start, so the cheapest moment to pick a model
-is before either one runs. Picking by hand is friction, so in practice everything goes to the biggest
-model. Trivium makes that choice for you, in front of both tools:
+## What it does
 
-- **Across vendors.** Routing inside Claude Code can't reach GPT, and routing inside Codex can't
-  reach Opus. A wrapper can reach both, plus a local model.
-- **Before any tokens are spent.** The decision is one forward pass of a local model. No hosted call
-  reads your prompt until the chosen tool does.
-- **With your existing setup.** Trivium launches the real `claude` and `codex` CLIs, so your logins,
-  subscriptions, settings, skills and MCP servers work as they already do.
+- **Routes across vendors:** one command in front of Claude Code, Codex and a local model, so a prompt can reach Opus, GPT or neither.
+- **Decides before any tokens are spent:** one forward pass of a local Qwen3.5-4B, about a quarter of a second. No hosted call reads your prompt until the chosen tool does.
+- **Asks three typed questions:** `kind`, `difficulty` and `tools`, each with a probability per option. No text is generated, so there is nothing to parse.
+- **Maps answers to a target with rules:** a first-match-wins table in `targets.yaml`. A new model is a config edit.
+- **Answers trivial questions itself:** the Qwen that routed the prompt also answers it, so one model in memory does both jobs.
+- **Keeps your setup:** it launches the real `claude` and `codex` CLIs, so logins, subscriptions, settings, skills and MCP servers work as they already do.
+- **Stays open as a terminal app:** type a prompt, see where it would go, and act on it with one key.
+- **Has a web dashboard and a JSON API:** the same flow in the browser on 127.0.0.1, token-protected, for embedding in another dashboard.
+- **Lets you overrule it:** `--ask` to pick from the likeliest targets, `--to` to skip the router, `--via` to swap the vendor.
+- **Logs every decision:** with full probabilities and your rating, ready to export as labelled prompts.
+- **Measures itself:** `ask eval`, `ask calibrate` and three bundled labelled sets show how often the router picks the right target.
+- **Runs on three runtimes:** MLX on Apple Silicon (default), PyTorch on CUDA or MPS, or llama.cpp on any CPU.
 
-## How it works
+The router runs on your machine. Your prompt only leaves it through the tool it is sent to.
 
-```text
-prompt ─▶ evidence ─▶ router ─────────────▶ rules ─▶ local Qwen      (answers in-process)
-          (prompt +    3 typed questions,           claude --model …  (Claude Code)
-          "inside      one forward pass,            codex -m …        (Codex)
-          repo X")     probability per option  └──▶ decisions.jsonl  (every decision logged)
-```
+## Install
 
-1. **Evidence.** The prompt (head and tail if long) plus one plain sentence saying whether you are
-   inside a git repository. The router reads sentences better than facts it has to infer.
-2. **Three questions.** `kind` (quick answer, code change, debugging, review, design, writing),
-   `difficulty` (trivial, moderate, hard) and `tools` (none, workspace). The router returns a
-   probability per option, using [semif](https://github.com/theoleecj/semif) to read Qwen3.5-4B's
-   option logits directly: no text is generated, so there is nothing to parse or hallucinate.
-3. **Rules.** A first-match-wins table in `targets.yaml` maps the answers to a target. If any answer
-   is less confident than its threshold, the prompt goes to a safe fallback instead.
-4. **Launch.** `claude --model <id>` or `codex -m <id>`, interactive by default or one-shot with
-   `-p`. Trivial questions are answered by the same Qwen that routed them, so one model in memory
-   does both jobs.
-
-### Default routing
-
-| The router says | Goes to |
-|---|---|
-| trivial quick answer or short writing, no files | local Qwen3.5-4B |
-| other trivial work without files | Claude Haiku 4.5 |
-| code change, trivial or moderate | Codex gpt-6-sol |
-| code change, hard | Codex gpt-6-astra |
-| design, hard | Claude Fable 5.1 |
-| anything else hard | Claude Opus 5.5 |
-| everything else, or the router is unsure | Claude Sonnet 5 |
-
-Every model name, rule, question and threshold lives in `targets.yaml`. A new model is a config edit.
-
-## Requirements
+You need:
 
 - One of three runtimes for the Qwen3.5-4B router (`router.runtime`):
   - `mlx` (default): macOS on Apple Silicon, about 9 GB of free memory in bf16, less with `bits: 8`.
@@ -78,7 +105,7 @@ Every model name, rule, question and threshold lives in `targets.yaml`. A new mo
 - The [Claude Code](https://code.claude.com) and/or [Codex](https://github.com/openai/codex) CLIs,
   logged in, for the targets you want to use.
 
-## Install
+**From source:**
 
 ```sh
 git clone https://github.com/7ucardie/trivium && cd trivium
@@ -88,295 +115,53 @@ uv tool install -e .       # puts `ask` (and `trivium`) on your PATH
 ask serve                  # keep the router warm; the first run downloads Qwen3.5-4B (~9 GB)
 ```
 
-For the `torch` or `llamacpp` runtime, set `router.runtime` in your config (see Configuration). The
-`llamacpp` runtime downloads the pinned `bartowski/Qwen_Qwen3.5-4B-GGUF` Q4_K_M file on first use,
-or reads a local file from `router.gguf`.
-
-While `ask serve` runs, http://127.0.0.1:8765/ shows a status page: the loaded model, backend and
-runtime, uptime, requests served, routing latency and your recent decisions with their ratings. It
-refreshes every 15 seconds and only listens on 127.0.0.1.
+For the `torch` or `llamacpp` runtime, set `router.runtime` in your config (see
+[Configuration](docs/reference/configuration.md)). The `llamacpp` runtime downloads the pinned
+`bartowski/Qwen_Qwen3.5-4B-GGUF` Q4_K_M file on first use, or reads a local file from `router.gguf`.
 
 `ask` works without `ask serve`, but then it loads the model for every prompt, which takes several
-seconds. To start the server at every login instead of by hand:
+seconds. `ask service install` starts the server at every login (macOS only).
+
+## Use
 
 ```sh
-ask service install        # a launchd agent that runs `ask serve`; logs to ~/Library/Logs/trivium.log
-ask service status
-ask service uninstall
-```
-
-## Terminal app
-
-Run `trivium` (or `ask` with no arguments) in a project folder. It stays open like the claude and codex
-CLIs: type a prompt, see where it would go, and act on it with one key.
-
-```text
-trivium · ~/workspaces/billing-service (billing-service) · semif · /help for keys
-› add retry with backoff to the stripe client
-  → codex-sol  gpt-6-sol  code_change · moderate · workspace  258 ms
-    1 codex-sol 78%   2 claude-sonnet 15%   3 claude-haiku 5%
-    enter open Codex · 1-3 pick · p one-shot · e edit · x drop
-```
-
-Enter opens the chosen tool right there, and you come back to trivium when you exit it. After each run
-it asks whether that was the right model (`g`, or `b` and what it should have been), which is what
-`ask export` later turns into tuning data. `/cd DIR` switches project; history is kept between runs.
-
-## Web dashboard
-
-While `ask serve` runs, http://127.0.0.1:8765/ is a dashboard with the same flow: pick a project, type
-a prompt, see the decision with every answer's probabilities, click another target if you disagree,
-then **Open in Claude Code / Codex** (a new Terminal window in that project) or **One-shot answer
-here** (streamed into the page). Rate the result with one click; recent decisions sit underneath.
-The simpler read-only page is still at `/status`.
-
-### Embedding it in another dashboard
-
-The dashboard is a client of a small JSON API on the same server, so another dashboard can use the API
-directly:
-
-| Method | Path | Body | Returns |
-|---|---|---|---|
-| GET | `/api/status` | | model, backend, runtime, uptime, counters, routing latencies |
-| GET | `/api/decisions?limit=25` | | recent decisions with picks and ratings |
-| GET | `/api/projects` | | folders for a project picker |
-| GET | `/api/targets` | | every target with vendor, model and tier |
-| POST | `/api/decide` | `{prompt, cwd}` | the decision: `id`, `target`, `answers`, `alternatives` |
-| POST | `/api/pick` | `{id, target}` | records choosing another target |
-| POST | `/api/run` | `{id, target?, mode}` | `mode: "oneshot"` streams text; `"terminal"` opens a window |
-| POST | `/api/rate` | `{id, verdict, should?}` | records `good` or `bad` |
-
-Every `/api` call needs the header `X-Trivium-Token` with the value from `ask token`, and POST bodies
-must be `application/json`. The server only answers on 127.0.0.1 or localhost, and refuses browser
-requests from other sites unless their origin is listed in `router.allowed_origins`. That matters,
-because `/api/run` starts `claude` and `codex`: keep the token private, and only list origins you
-control. The dashboard page itself cannot be framed by another site.
-
-## Usage
-
-```sh
+trivium                                          # the terminal app: type prompts, act with one key
 ask "fix the flaky test in tests/test_auth.py"   # route, then open an interactive session
 ask -p "regex for a semver string"               # one-shot: print the answer and exit
 ask why "plan the billing architecture"          # show the decision and probabilities only
-ask why --json "plan the billing architecture"   # the same as JSON, for scripts and editors
-ask --ask "refactor the auth module"             # show the likeliest targets and pick one
 ask --to opus "..."                              # skip the router: target, short name or model id
-ask --via codex "..."                            # keep the routed tier, use the other vendor
-ask --no-local "..."                             # never answer with the local model
-ask targets                                      # list targets and the config file in use
+ask serve                                        # keep the router warm; dashboard at http://127.0.0.1:8765/
 ```
 
-`--ask` shows the three likeliest targets with their probability, computed by routing the top
-two answers of every question through the rules, and lets you pick one or keep the router's choice.
-Set `router.ask_when_unsure: true` to get that prompt automatically whenever the router is unsure,
-instead of the fallback.
+Every command and flag is in the [CLI reference](docs/reference/cli.md).
 
-`--via` keeps the strength and swaps the vendor: a route to Claude Opus becomes Codex gpt-6-astra, and a
-route to Codex gpt-6-sol becomes Claude Sonnet.
+## Documentation
 
-## Configuration
+The docs follow [Diátaxis](https://diataxis.fr/); start at [docs/README.md](docs/README.md).
 
-`ask targets` prints the config file in use. To customise it:
+- **Tutorial:** [Getting started](docs/tutorials/getting-started.md)
+- **How-to:** [Use the terminal app](docs/how-to/terminal-app.md) · [Use the web dashboard](docs/how-to/web-dashboard.md) · [Measure and improve the router](docs/how-to/measure-the-router.md) · [Calibrate the router](docs/how-to/calibrate.md)
+- **Reference:** [CLI](docs/reference/cli.md) · [Configuration](docs/reference/configuration.md) · [Runtimes and backends](docs/reference/runtimes-and-backends.md) · [JSON API](docs/reference/api.md) · [Status and limits](docs/reference/stability.md)
+- **Explanation:** [How Trivium works](docs/explanation/how-trivium-works.md)
 
-```sh
-mkdir -p ~/.config/trivium
-cp src/trivium/targets.yaml ~/.config/trivium/targets.yaml   # or point TRIVIUM_CONFIG at any file
-```
+## Roadmap
 
-The file has four parts: `router` (model, pinned revision, quantisation, port), `questions` (wording
-and option descriptions), `targets` (vendor, tier, model id, optional effort) and `rules`
-(first match wins, plus `default` and `fallback`).
+Trivium is early: it works end to end on the author's machine, and interfaces and defaults will change.
+The current limits are in [Status and limits](docs/reference/stability.md).
 
-Wording is the biggest lever. Questions ask what the text *says*, not what to do, and every option
-has a description. Changing the difficulty question from "How demanding is the work?" to "How much
-work would a skilled engineer need?" with time-based options moved difficulty accuracy from 67% to
-81% on the bundled eval set.
+**Next:** more labelled prompts. Calibration is fitted on 72 prompts and checked on 28, and the option weights ship off because their gain was not significant on 119.
 
-## Measuring and improving the router
+**Later:**
 
-```sh
-ask eval evals/prompts.jsonl --show-misses       # accuracy per question and per target
-ask eval evals/prompts.jsonl --backend laya      # same prompts, Laya instead of semif
-ask eval evals/prompts.jsonl --sweep             # right target vs fallback rate per confidence floor
-ask rate bad --should opus                       # label the last real decision
-ask export --out mine.jsonl --only-rated         # decision log -> labelled prompts to review
-```
+- **A trained router:** the decision log is the data for training one.
+- **`torch` on a CUDA GPU:** tested on Apple MPS only.
+- **`ask service` beyond macOS:** it uses launchd.
 
-Every decision is appended to `~/.local/state/trivium/decisions.jsonl` with the full probabilities,
-and `ask rate` appends labels. That log is the data for tuning thresholds and wording, and for
-training a router later.
+**Not planned:**
 
-`ask export` turns the log into the same format as `evals/prompts.jsonl`. Feedback only names the
-target a prompt should have gone to, while `ask eval` and `ask calibrate` need an answer per question,
-so every row is pre-filled and labelled with where its answers came from:
+- **Routing per turn:** routing happens once per task. Once a session is open you stay in that tool.
 
-- `confirmed-target`: rated good; the router's answers led to the right target.
-- `inferred-from-feedback`: rated bad with `--should`, or re-routed with `--ask`; the answers are the
-  most likely combination, under the router's own scores, that leads to the target you chose.
-- `router`: unrated; the router's answers as they were.
-
-Rows with `needs_review: true` need a human to check the per-question answers before the file is used
-for evaluation or calibration. Decisions made with `--to` never ran the router and are skipped.
-
-Trivium ships two labelled sets. `evals/calibration-100.jsonl` is the main one: 100 prompts across
-every kind, difficulty and tools answer, including general questions typed inside a repository, long
-pasted logs and Dutch prompts. Two labellers answered them independently (agreement 100% on kind, 90%
-on difficulty, 97% on tools) and the 12 disagreements were settled in the file. It is split 72 / 28 so
-that calibration is fitted on one part and checked on the other
-([write-up](evals/results/2026-09-25-calibration-100.md)). With the shipped config, semif routes to the
-right target on 77.8% of the training prompts, **71.4% of the held-out prompts** and 80.6% of the older
-set below; kind, difficulty and tools score 89.3%, 82.1% and 78.6% on the held-out prompts.
-
-```sh
-ask eval evals/calibration-100.jsonl --split test     # the held-out 28
-ask calibrate evals/calibration-100.jsonl --split train
-```
-
-`evals/difficulty-120.jsonl` is a third set of 119 prompts written around the difficulty boundaries,
-used to test fixes for the router's main weakness: it calls short moderate requests trivial. Rewording
-the question made things worse; weighting the options helped (see Option weights below).
-
-`evals/prompts.jsonl` holds 36 prompts I wrote and labelled by hand earlier. Same prompts, same questions,
-same rules, confidence thresholds off, on an Apple M5 Pro (full write-up in
-[`evals/results/2026-09-23.md`](evals/results/2026-09-23.md)):
-
-| Router | Kind | Difficulty | Tools | Right target | Latency p50 |
-|---|---|---|---|---|---|
-| semif + Qwen3.5-4B, MLX bf16 (default) | **94.4%** | **80.6%** | 80.6% | **80.6%** | 241 ms |
-| Laya 0.3.7, English checkpoint | 69.4% | 47.2% | 97.2% | 38.9% | **98 ms** |
-| Laya 0.3.7, typed-decisions checkpoint | 80.6% | 47.2% | **100%** | 47.2% | 99 ms |
-| Hybrid: Laya English for tools, semif for the rest | **94.4%** | **80.6%** | 97.2% | **83.3%** | 263 ms |
-| Hybrid: Laya typed-decisions for tools | **94.4%** | **80.6%** | **100%** | **83.3%** | 247 ms |
-
-"Right target" means the router's answers lead to the same target as the hand labels would. The
-question wording was tuned on this set with semif, which favours semif; on the larger set the hybrid
-does worse than semif (see Backends).
-
-### Runtimes
-
-All three runtimes read the same prompt and answer slots through the vendored semif code, so they make
-the same decisions up to arithmetic. On the bundled set, against `mlx`, on an Apple M5 Pro:
-
-| Runtime | Right target | Changed targets | Changed answers | Largest score change | p50 per prompt |
-|---|---|---|---|---|---|
-| `mlx`, bf16 | 29/36 | | | | 253 ms |
-| `torch` on MPS, bf16 | 29/36 | 0/36 | 3/108 | 0.33 | 1,293 ms |
-| `llamacpp` on CPU, Q4_K_M | 27/36 | 3/36 | 4/108 | 0.56 | 2,037 ms |
-
-`torch` on an Apple GPU is five times slower than MLX; it exists for CUDA machines. `llamacpp` runs
-the 4-bit file on the CPU, which costs two prompts on this set and two seconds a prompt.
-
-### Backends
-
-`router.backend` picks who answers the questions:
-
-- `semif` (default): Qwen3.5-4B answers all three and also answers local prompts.
-- `laya`: the Laya encoder answers all three. Faster, decides only, so local targets go to Claude.
-- `hybrid`: Laya answers the questions listed in `router.hybrid_laya` (default `[tools]`), semif the
-  rest. It looked best on the first 36 prompts, but on the 100-prompt set it routes general questions
-  typed inside a repository ("what does ECONNREFUSED mean") as if they needed the workspace, and it
-  scores 57.1% against semif's 71.4% on the held-out prompts. Use semif unless your own evaluation
-  says otherwise.
-
-`laya` and `hybrid` need `uv sync --extra laya`.
-
-`ask serve` reports which backend it runs. If your config names another one, `ask` loads the
-configured backend in-process rather than read one router's scores with another's calibration;
-restart `ask serve` to switch it.
-
-Laya reads about 320 tokens of evidence and cuts the end, so on a long prompt it never saw the
-repository sentence. Moving that sentence in front of the prompt fixed long prompts but cost 9 of the
-36 tools answers on short ones, so Trivium instead keeps the order and shortens the request to
-`router.laya_max_request_chars` (300) for Laya, keeping its start and end. On a 60-line pasted log
-that moves Laya's "needs the workspace" score from 0.15 both inside and outside a repository to 0.60
-inside and 0.08 outside, and leaves the bundled set unchanged (its longest prompt is 147 characters).
-The 300 was chosen on two made-up long prompts, so treat it as a starting point.
-
-Laya defaults to its `typed-decisions` checkpoint. In the hybrid it scored 100% on tools against the
-English checkpoint's 97.2%, and sent 8.3% of prompts to the fallback instead of 13.9%, because it
-reports its answers more confidently. Both differences are one or two prompts on the bundled set.
-
-### Calibration
-
-Router scores are not probabilities until you calibrate them. `ask calibrate` fits one temperature
-per question on labelled prompts and prints a block for your config:
-
-```sh
-ask calibrate evals/prompts.jsonl --backend hybrid           # prints a block to paste
-ask calibrate evals/prompts.jsonl --backend hybrid --write   # or saves it to ~/.config/trivium/calibration.yaml
-```
-
-```yaml
-calibration:
-  hybrid:
-    kind: 0.6
-    difficulty: 1.35
-    tools: 0.25   # flagged: at the grid edge, needs more labelled data
-```
-
-`--write` keeps fitted values in their own file, so your hand-edited `targets.yaml` and its comments
-stay untouched; the file overrides the config's `calibration` block backend by backend.
-
-Then pick the thresholds with `ask eval --sweep`, which applies one confidence floor to every question
-and shows the right-target rate, the fallback rate and the accuracy of the prompts that were not sent
-to the fallback.
-
-The shipped config holds semif temperatures fitted on the 72 training prompts of the 100-prompt set
-(kind 0.95, difficulty 1.21, tools 2.16). On the held-out 28 they lower the calibration error of the
-tools answers from 0.129 to 0.068 and of difficulty from 0.149 to 0.131. It ships **no** confidence
-floors: on that set every floor from 0.3 to 0.8 routed fewer prompts right, and none reduced the
-prompts sent to a model that was too weak, which is what a fallback is meant to prevent.
-
-Two lessons from the bundled set. First, fit on a few hundred labels, not 36: on this set Laya's
-tools answers are right 35 times in 36 yet reported at a median confidence of 0.75, so the fit runs to the edge of
-the allowed range. Second, re-choose `min_confidence` after calibrating. Temperatures change the
-scale the thresholds are read on: applying semif's fitted temperatures with thresholds tuned on raw
-scores sent more prompts to the fallback and lowered the right-target rate from 80.6% to 75.0%.
-
-### Option weights
-
-The router under-picks "moderate" difficulty: short requests like "add a --verbose flag" or "review my
-staged changes" come out trivial and go to a model that is too weak. `option_weights` corrects that by
-multiplying an option's score before anything else:
-
-```yaml
-option_weights:
-  difficulty: {moderate: 3, hard: 2}
-```
-
-On 119 held-out prompts this raised difficulty accuracy from 79.0% to 85.7% (moderate from 44% to 80%),
-right target from 73.9% to 78.2%, and cut the prompts sent to a model that was too weak from 13 to 7.
-It ships off because the gain was not statistically significant on that set (paired test p = 0.30,
-10 prompts fixed against 5 broken). Details: [evals/results/2026-09-26-difficulty.md](evals/results/2026-09-26-difficulty.md).
-
-### Laya backend
-
-[Laya](https://huggingface.co/convaiinnovations/laya) is a 421M-parameter encoder that makes the same
-kind of typed decision in about 100 ms for all three questions. Without training on your own prompts it
-rates almost every request "moderate", but it is the better judge of whether a request needs your files.
-It is available as an optional backend:
-
-```sh
-uv sync --extra laya
-# targets.yaml: router.backend: laya
-```
-
-Laya only decides, so with this backend local targets are routed to Claude instead.
-
-## Status and limits
-
-- Early. It works end to end on the author's machine; interfaces and defaults will change.
-- Calibration is fitted on 72 labelled prompts and checked on 28; one held-out prompt is 3.6 points.
-  Your own prompts (`ask export`) are the better calibration set.
-- Only the `mlx` runtime has been used day to day. `torch` was tested on Apple MPS, not on a CUDA
-  GPU; `llamacpp` was tested on an Apple CPU. Both match the MLX routing closely on the bundled set
-  (see below), but treat them as new.
-- `ask service` uses launchd, so it is macOS only.
-- Routing happens once per task, not per turn. Once a session is open you stay in that tool.
-- semif's probabilities are not calibrated. Treat `min_confidence` values as starting points.
-- Codex refuses one-shot runs outside a trusted git repository. Trivium leaves that check alone.
-
-## Credits and licenses
+## License
 
 Trivium is released under the [MIT License](LICENSE). It builds on:
 
