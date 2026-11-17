@@ -5,25 +5,44 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="trivium-token" content="__TRIVIUM_TOKEN__">
 <title>Trivium</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 160'%3E%3Crect width='160' height='160' rx='34' fill='%23062f3a'/%3E%3Cg fill='none' stroke-width='16' stroke-linecap='round'%3E%3Cpath d='M80 58V126' stroke='%23f4efe2'/%3E%3Cpath d='M80 58H36' stroke='%236ad7cf'/%3E%3Cpath d='M80 58H124' stroke='%230f8c8f'/%3E%3C/g%3E%3Ccircle cx='80' cy='58' r='13' fill='%23062f3a' stroke='%23f4efe2' stroke-width='7'/%3E%3C/svg%3E">
 <style>
+/* The Trivium theme, from one palette: #062f3a #0b5562 #0f8c8f #6ad7cf #f4efe2.
+   Cream paper in light, deep water in dark; the three roads are three steps of the same sea. */
 :root {
-  --bg:#f6f6f3; --panel:#ffffff; --panel2:#f0efea; --text:#1b1b1a; --dim:#686760; --line:#e2e1db;
-  --accent:#1f6fd1; --accent-ink:#ffffff; --warn:#9a5b00; --good:#1e7a45; --bad:#b3372c; --bar:#c9d9f2;
+  --bg:#f4efe2; --panel:#fbf8f0; --panel2:#ebe5d5; --text:#062f3a; --dim:#4d6c72; --line:#ddd5c2;
+  --accent:#0b5562; --accent-ink:#f4efe2; --warn:#8a5a00; --good:#177a52; --bad:#b3372c;
+  --bar:#e6dfcd; --bar-top:#bfe9e3;
+  --claude:#0f8c8f; --codex:#062f3a; --local:#0b5562;
+  --shadow:0 1px 2px rgba(6,47,58,.06), 0 10px 28px -18px rgba(6,47,58,.28);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg:#131312; --panel:#1d1d1b; --panel2:#262624; --text:#ecebe6; --dim:#9d9b94; --line:#33322f;
-    --accent:#6aa6f0; --accent-ink:#0b1320; --warn:#e0a44a; --good:#5cc48a; --bad:#ef7a6f; --bar:#2c4666;
+    --bg:#062f3a; --panel:#083945; --panel2:#0a4652; --text:#f4efe2; --dim:#9cc1c0; --line:#125a66;
+    --accent:#6ad7cf; --accent-ink:#062f3a; --warn:#e6b25a; --good:#7ed9a0; --bad:#f08a7a;
+    --bar:#0b5562; --bar-top:#0f8c8f;
+    --claude:#6ad7cf; --codex:#f4efe2; --local:#38b3b0;  /* a lighter step of #0f8c8f: readable as text */
+    --shadow:none;
   }
+}
+:root {
+  --claude-tint:color-mix(in srgb, var(--claude) 30%, var(--panel2));
+  --codex-tint:color-mix(in srgb, var(--codex) 22%, var(--panel2));
+  --local-tint:color-mix(in srgb, var(--local) 30%, var(--panel2));
 }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
-main { max-width:1100px; margin:0 auto; padding:18px 16px 48px; }
-header { display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 14px; margin-bottom:16px; }
-header h1 { font-size:19px; margin:0; }
+body::before { content:""; display:block; height:3px;
+  background:linear-gradient(90deg, #0b5562, #0f8c8f, #6ad7cf); }
+main { max-width:1100px; margin:0 auto; padding:24px 16px 56px; }
+header { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; margin-bottom:18px; }
+header h1 { display:flex; align-items:center; gap:9px; font-size:18px; font-weight:650; letter-spacing:.01em; margin:0; }
+header svg { width:24px; height:24px; }
+header a { color:var(--accent); text-underline-offset:3px; }
 .meta { color:var(--dim); font-size:12.5px; }
-.panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:14px; }
-label { display:block; color:var(--dim); font-size:12px; margin-bottom:4px; }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:16px; box-shadow:var(--shadow); }
+label, th { text-transform:uppercase; letter-spacing:.06em; }
+label { display:block; color:var(--dim); font-size:11px; margin-bottom:5px; }
 .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
 select, input[type=text], textarea {
   width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px;
@@ -32,22 +51,41 @@ select, input[type=text], textarea {
 textarea { min-height:84px; resize:vertical; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; }
 button {
   font:inherit; border-radius:8px; border:1px solid var(--line); background:var(--panel2); color:var(--text);
-  padding:7px 13px; cursor:pointer;
+  padding:7px 14px; cursor:pointer; transition:background .12s, border-color .12s;
 }
+button:hover:not(:disabled) { border-color:var(--dim); }
+button.primary:hover:not(:disabled) { border-color:var(--accent); filter:brightness(1.06); }
 button.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
 button:disabled { opacity:.45; cursor:default; }
 button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
 .hint { color:var(--dim); font-size:12px; }
-.target { font-size:20px; font-weight:700; color:var(--accent); }
+.target { font-size:22px; font-weight:700; letter-spacing:-.01em; color:var(--accent); }
+.target[data-vendor=claude] { color:var(--claude); }
+.target[data-vendor=codex] { color:var(--codex); }
+.target[data-vendor=local] { color:var(--local); }
+[data-vendor=claude] { --v:var(--claude); --v-tint:var(--claude-tint); }
+[data-vendor=codex] { --v:var(--codex); --v-tint:var(--codex-tint); }
+[data-vendor=local] { --v:var(--local); --v-tint:var(--local-tint); }
+#decision[data-vendor] { border-left:3px solid var(--v); }
+#decision[data-vendor] button.primary { background:var(--v); border-color:var(--v); }
+.dot::before { content:""; display:inline-block; width:8px; height:8px; border-radius:50%;
+  background:var(--v, var(--dim)); margin-right:7px; vertical-align:1px; }
+td.dot { color:var(--v, inherit); font-weight:550; }
+td.good { color:var(--good); } td.bad { color:var(--bad); }
 .chips { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
 .chip { border-radius:999px; padding:4px 11px; font-size:13px; }
-.chip.on { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+.chip.on { background:var(--v-tint, var(--accent)); color:var(--text); border-color:var(--v, var(--accent)); font-weight:600; }
 .q { display:grid; grid-template-columns:90px 1fr; gap:6px 10px; align-items:center; margin:8px 0; font-size:13px; }
-.q .name { color:var(--dim); }
 .bars { display:flex; flex-direction:column; gap:3px; }
-.bar { position:relative; background:var(--panel2); border-radius:4px; height:20px; overflow:hidden; }
-.bar span.fill { position:absolute; inset:0 auto 0 0; background:var(--bar); }
-.bar span.txt { position:relative; padding:0 7px; line-height:20px; font-size:12px; white-space:nowrap; }
+.bar { position:relative; background:var(--panel2); border-radius:6px; height:22px; overflow:hidden; }
+.bar span.fill { position:absolute; inset:0 auto 0 0; background:var(--bar); border-radius:6px; }
+.bar.top span.fill { background:var(--bar-top); }
+.q:nth-child(1) { --q:var(--claude); --q-tint:var(--claude-tint); }
+.q:nth-child(2) { --q:var(--local); --q-tint:var(--local-tint); }
+.q:nth-child(3) { --q:var(--codex); --q-tint:var(--codex-tint); }
+.q .name { color:var(--q, var(--dim)); font-weight:550; }
+.q .bar.top span.fill { background:var(--q-tint, var(--bar-top)); }
+.bar span.txt { position:relative; padding:0 8px; line-height:22px; font-size:12px; white-space:nowrap; }
 .bar.top span.txt { font-weight:600; }
 .warn { color:var(--warn); }
 pre.out {
@@ -57,8 +95,9 @@ pre.out {
 .rate button.good { color:var(--good); } .rate button.bad { color:var(--bad); }
 .scroll { overflow-x:auto; }
 table { border-collapse:collapse; width:100%; }
-th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; font-size:13px; }
-th { color:var(--dim); font-weight:500; font-size:12px; }
+th, td { text-align:left; padding:8px 8px; border-bottom:1px solid var(--line); vertical-align:top; font-size:13px; }
+th { color:var(--dim); font-weight:500; font-size:11px; }
+tbody tr:hover td { background:var(--panel2); }
 tr:last-child td { border-bottom:0; }
 td.prompt { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; min-width:240px; }
 td.num { text-align:right; font-variant-numeric:tabular-nums; }
@@ -70,9 +109,12 @@ td.num { text-align:right; font-variant-numeric:tabular-nums; }
 <body>
 <main>
   <header>
-    <h1>Trivium</h1>
+    <h1><svg viewBox="16 22 128 128" aria-hidden="true"><g fill="none" stroke-width="18" stroke-linecap="round">
+      <path d="M80 58V134" stroke="var(--local)"/><path d="M80 58H30" stroke="var(--claude)"/>
+      <path d="M80 58H130" stroke="var(--codex)"/></g>
+      <circle cx="80" cy="58" r="14" fill="var(--bg)" stroke="currentColor" stroke-width="8"/></svg>Trivium</h1>
     <span class="meta" id="meta">connecting…</span>
-    <span class="meta"><a href="/status" style="color:var(--accent)">status</a></span>
+    <span class="meta"><a href="/status">status</a></span>
   </header>
 
   <section class="panel" aria-labelledby="ask-h">
@@ -224,7 +266,8 @@ function showDecision() {
   const alts = $("d-alts");
   alts.replaceChildren();
   for (const a of d.alternatives) {
-    const b = el("button", { className: "chip" + (a.name === chosen ? " on" : ""), textContent: `${a.name} ${Math.round(a.p * 100)}%` });
+    const b = el("button", { className: "chip dot" + (a.name === chosen ? " on" : ""), textContent: `${a.name} ${Math.round(a.p * 100)}%` });
+    b.dataset.vendor = a.vendor;
     b.setAttribute("role", "radio");
     b.setAttribute("aria-checked", String(a.name === chosen));
     b.onclick = () => choose(a.name);
@@ -248,6 +291,8 @@ function showDecision() {
 function updateChosen() {
   const t = targets.find((x) => x.name === chosen) || current.target;
   $("d-target").textContent = chosen;
+  $("d-target").dataset.vendor = t.vendor;
+  $("decision").dataset.vendor = t.vendor;
   $("d-model").textContent = t.model;
   for (const b of $("d-alts").children) {
     const on = b.textContent.startsWith(chosen + " ");
@@ -353,13 +398,15 @@ async function loadRecent() {
       const fb = d.feedback || {};
       const verdict = (fb.verdict === "good" ? "✓" : fb.verdict === "bad" ? "✗" : "") + (fb.should ? " → " + fb.should : "");
       const answers = Object.values(d.answers || {}).map((a) => a.choice).join(" · ") || "manual";
+      const target = el("td", { className: "nowrap dot", textContent: d.target || "" });
+      target.dataset.vendor = (targets.find((t) => t.name === d.target) || {}).vendor || "";
       body.append(el("tr", {},
         el("td", { className: "dim nowrap", textContent: ago(d.ts) }),
         el("td", { className: "prompt", textContent: (d.prompt || "").slice(0, 160), title: d.prompt || "" }),
-        el("td", { className: "nowrap", textContent: d.target || "" }),
+        target,
         el("td", { className: "nowrap", textContent: answers }),
         el("td", { className: "num", textContent: d.route_ms ? Math.round(d.route_ms) : "" }),
-        el("td", { className: "nowrap", textContent: verdict })));
+        el("td", { className: "nowrap " + (fb.verdict || ""), textContent: verdict })));
     }
     $("recent-meta").textContent = rows.length ? "" : "nothing logged yet";
   } catch (e) { $("recent-meta").textContent = e.message; }

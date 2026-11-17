@@ -1,11 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="Trivium logo: three roads meeting at one point">
-  <rect width="160" height="160" rx="34" fill="#16181d"/>
-  <g fill="none" stroke-width="13" stroke-linecap="round">
-    <!-- one road in, three roads out: local, Claude Code, Codex -->
-    <path d="M80 132V84" stroke="#ecebe6"/>
-    <path d="M80 84L38 42" stroke="#D97757"/>
-    <path d="M80 84V30" stroke="#8b86f5"/>
-    <path d="M80 84L122 42" stroke="#6aa6f0"/>
-  </g>
-  <circle cx="80" cy="84" r="13" fill="#16181d" stroke="#ecebe6" stroke-width="6"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="Trivium logo: a T made of three roads that meet in one point">
+  <!-- three roads meet and spell the T of Trivium: Claude Code, the local model, Codex -->
+  <rect width="160" height="160" rx="34" fill="#062f3a"/>
+  <g fill="none" stroke-width="16" stroke-linecap="round"><path d="M80 58V126" stroke="#f4efe2"/><path d="M80 58H36" stroke="#6ad7cf"/><path d="M80 58H124" stroke="#0f8c8f"/></g><circle cx="80" cy="58" r="13" fill="#062f3a" stroke="#f4efe2" stroke-width="7"/>
 </svg>

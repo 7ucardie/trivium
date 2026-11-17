@@ -106,10 +106,11 @@ def render(info: dict, decisions: list[dict], now: float | None = None) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="refresh" content="{REFRESH_SECONDS}">
 <title>Trivium status</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 160'%3E%3Crect width='160' height='160' rx='34' fill='%23062f3a'/%3E%3Cg fill='none' stroke-width='16' stroke-linecap='round'%3E%3Cpath d='M80 58V126' stroke='%23f4efe2'/%3E%3Cpath d='M80 58H36' stroke='%236ad7cf'/%3E%3Cpath d='M80 58H124' stroke='%230f8c8f'/%3E%3C/g%3E%3Ccircle cx='80' cy='58' r='13' fill='%23062f3a' stroke='%23f4efe2' stroke-width='7'/%3E%3C/svg%3E">
 <style>
-:root {{ --bg:#f7f7f5; --panel:#fff; --text:#1b1b1a; --dim:#6b6a66; --line:#e3e2dd; --accent:#1f6fd1; --warn:#9a5b00; }}
+:root {{ --bg:#f4efe2; --panel:#fbf8f0; --text:#062f3a; --dim:#4d6c72; --line:#ddd5c2; --accent:#0b5562; --warn:#8a5a00; }}
 @media (prefers-color-scheme: dark) {{
-  :root {{ --bg:#141413; --panel:#1f1f1d; --text:#ecebe6; --dim:#9d9b94; --line:#33322f; --accent:#6aa6f0; --warn:#e0a44a; }}
+  :root {{ --bg:#062f3a; --panel:#083945; --text:#f4efe2; --dim:#9cc1c0; --line:#125a66; --accent:#6ad7cf; --warn:#e6b25a; }}
 }}
 * {{ box-sizing:border-box; }}
 body {{ margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; }}
