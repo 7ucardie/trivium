@@ -4,6 +4,9 @@ Trivium runs on Windows with the `llamacpp` runtime on the CPU, or with `torch` 
 guide uses `llamacpp`. It decides only: prompts the rules send to the local model go to Claude
 instead. Expect seconds per decision, not a quarter of a second: about 6 to 10 seconds on a 24-core
 Xeon from 2016.
+A smaller model or fewer threads did not help: see the
+[Windows CPU round](../../evals/results/2026-11-17-windows-cpu.md). `router.cache: true` makes exact
+repeats instant.
 
 ## 1. Install with a prebuilt llama.cpp
 
