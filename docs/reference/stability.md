@@ -8,6 +8,8 @@
   (see [Runtimes](runtimes-and-backends.md#runtimes)), but treat them as new.
 - The correction model (`ask correct`) and the `systemone` backend are new: measured on 255 prompts
   written for the evaluation, on one Windows machine. Both ship off.
+- The guard recognises known shapes of secrets and of injected instructions. It lowers the chance that
+  one leaves your machine; it does not make a prompt safe. See [Guard](configuration.md#guard).
 - `ask service` uses launchd on macOS and a scheduled task on Windows; there is none for Linux.
 - Windows was tested on one machine, with the `llamacpp` runtime: routing, the API, one-shot answers and
   opening a console. The terminal app and `--ask` are written for it but were not tried by hand.

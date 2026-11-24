@@ -87,6 +87,7 @@ $ ask -p "what does HTTP 409 mean"
 - **Stays open as a terminal app:** type a prompt, see where it would go, and act on it with one key.
 - **Has a web dashboard and a JSON API:** the same flow in the browser on 127.0.0.1, token-protected, for embedding in another dashboard.
 - **Lets you overrule it:** `--ask` to pick from the likeliest targets, `--to` to skip the router, `--via` to swap the vendor.
+- **Guards the prompt:** redacts keys, tokens and passwords, removes invisible characters, and warns about text that poses as the system or the assistant, before the prompt reaches the router, the log or a model.
 - **Logs every decision:** with full probabilities and your rating, ready to export as labelled prompts.
 - **Measures itself:** `ask eval`, `ask calibrate` and three bundled labelled sets show how often the router picks the right target.
 - **Runs on three runtimes:** MLX on Apple Silicon (default), PyTorch on CUDA or MPS, or llama.cpp on any CPU.

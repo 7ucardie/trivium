@@ -9,7 +9,7 @@ directly:
 | GET | `/api/decisions?limit=25` | | recent decisions with picks and ratings |
 | GET | `/api/projects` | | folders for a project picker |
 | GET | `/api/targets` | | every target with vendor, model and tier |
-| POST | `/api/decide` | `{prompt, cwd}` | the decision: `id`, `target`, `answers`, `alternatives` |
+| POST | `/api/decide` | `{prompt, cwd}` | the decision: `id`, `target`, `answers`, `alternatives`, and `guard` (what the [guard](configuration.md#guard) found; `prompt` is the prompt after redaction). 400 when the guard blocks |
 | POST | `/api/pick` | `{id, target}` | records choosing another target |
 | POST | `/api/run` | `{id, target?, mode}` | `mode: "oneshot"` streams text; `"terminal"` opens a window |
 | POST | `/api/rate` | `{id, verdict, should?}` | records `good` or `bad` |

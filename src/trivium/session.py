@@ -13,7 +13,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import cli, config, launch, log, policy, state, status, stream
+from . import cli, config, guard, launch, log, policy, state, status, stream
 
 LAUNCH_DIR = log.LOG.parent / "launch"
 
@@ -43,6 +43,8 @@ class Router:
         prompt = prompt.strip()
         if not prompt:
             raise ValueError("empty prompt")
+        # Before anything else: what the guard removes must not reach the router, the log or a model.
+        prompt, guarded = guard.apply(self.cfg, prompt)
         cwd = str(Path(cwd).expanduser().resolve())
         if not Path(cwd).is_dir():
             raise ValueError(f"not a directory: {cwd}")
@@ -61,13 +63,13 @@ class Router:
             "type": "decision", "prompt": prompt, "cwd": cwd, "repo": repo, "backend": self.name,
             "answers": decision.answers, "scores": decision.scores, "routed": routed,
             "target": decision.target, "reason": decision.reason, "via": None, "manual": False, "one_shot": False,
-            "route_ms": round(elapsed * 1000, 1),
+            "route_ms": round(elapsed * 1000, 1), "guard": guarded,
         })
         return {
             "id": decision_id, "prompt": prompt, "cwd": cwd, "repo": repo, "routed": routed,
             "target": self.target_info(decision.target), "reason": decision.reason,
             "unsure": decision.unsure, "answers": decision.answers,
-            "alternatives": alternatives[:4], "route_ms": round(elapsed * 1000, 1),
+            "alternatives": alternatives[:4], "route_ms": round(elapsed * 1000, 1), "guard": guarded,
         }
 
     def pick(self, decision_id: str, target: str) -> dict:

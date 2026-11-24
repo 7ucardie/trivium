@@ -35,6 +35,16 @@ router:
   laya_subfolder: typed-decisions
   laya_max_request_chars: 300  # Laya reads ~320 tokens and cuts the end; shorter keeps the repo sentence
 
+# What to do with a prompt before it goes to the router, the decision log or a model.
+# off, warn (say so and go on), redact (replace it with a placeholder and go on) or block (refuse).
+guard:
+  secrets: redact    # keys, tokens, passwords and private keys, recognised by their shape
+  hidden: redact     # invisible characters that can hide instructions in pasted text; redact removes them
+  # Text that poses as the system, the assistant or a tool instead of your own words: chat control
+  # tokens, role tags and labels, "ignore previous instructions", claims of authority, encoded blocks.
+  injection: warn
+  personal: warn     # payment card numbers and IBANs with a valid checksum
+
 # Questions ask what the text *says*, not what to do; every option is described.
 questions:
   kind:

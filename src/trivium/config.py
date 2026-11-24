@@ -149,6 +149,11 @@ def validate(cfg: dict) -> None:
         for option, w in (weights or {}).items():
             if option not in questions[qid]["options"] or not (isinstance(w, (int, float)) and w > 0):
                 raise ValueError(f"option_weights.{qid}.{option}: needs a known option and a positive number")
+    from .guard import ACTIONS, DEFAULTS
+
+    for category, action in (cfg.get("guard") or {}).items():
+        if category not in DEFAULTS or action not in ACTIONS:
+            raise ValueError(f"guard.{category}: needs one of {sorted(DEFAULTS)} and one of {ACTIONS}")
     for qid in cfg.get("min_confidence", {}):
         if qid not in questions:
             raise ValueError(f"min_confidence: unknown question {qid!r}")

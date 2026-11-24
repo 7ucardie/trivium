@@ -130,6 +130,8 @@ class App:
         answers = " · ".join(a["choice"] for a in d["answers"].values())
         t = self.router.target_info(current)
         note = warn(" unsure: " + ", ".join(d["unsure"])) if d["unsure"] else ""
+        if d.get("guard"):
+            self.out(warn(f"  guard {session.guard.describe(d['guard'])}"))
         self.out(f"  → {accent(current)}  {t['model']}  {dim(answers)}  {dim(str(round(d['route_ms'])) + ' ms')}{note}")
         choices = "   ".join(
             (accent if a["name"] == current else str)(f"{i} {a['name']} {a['p']:.0%}")

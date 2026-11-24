@@ -28,7 +28,7 @@ import os
 import sys
 import time
 
-from . import config, launch, log, policy, server, state
+from . import config, guard, launch, log, policy, server, state
 from .server import Remote
 
 BACKENDS = config.BACKENDS
@@ -172,6 +172,14 @@ def run(argv: list[str]) -> int:
         parser.error("no prompt given")
 
     cfg = config.load()
+    # Before anything else: what the guard removes must not reach the router, the log or a model.
+    try:
+        prompt, guarded = guard.apply(cfg, prompt)
+    except guard.Blocked as error:
+        print(f"trivium: blocked: {error}", file=sys.stderr)
+        return 2
+    if guarded:
+        print(f"trivium: guard {guard.describe(guarded)}", file=sys.stderr)
     name = backend_name(cfg)
     cwd = os.getcwd()
     repo = state.repo_name(cwd)
@@ -202,6 +210,7 @@ def run(argv: list[str]) -> int:
             "target": decision.target, "vendor": target["vendor"], "model": target["model"],
             "effort": target.get("effort"), "reason": decision.reason, "unsure": decision.unsure,
             "routed": routed, "backend": name, "route_ms": elapsed and round(elapsed * 1000, 1),
+            "guard": guarded,
             "answers": decision.answers,
             "alternatives": policy.alternatives(cfg, decision.answers) if decision.answers else [],
             "command": None if target["vendor"] == "local" else launch.argv(target, prompt, one_shot=args.one_shot),
@@ -212,7 +221,7 @@ def run(argv: list[str]) -> int:
         "type": "decision", "prompt": prompt, "cwd": cwd, "repo": repo, "backend": name,
         "answers": decision.answers, "scores": decision.scores, "routed": routed,
         "target": decision.target, "reason": decision.reason, "via": args.via, "manual": bool(args.to or picked),
-        "one_shot": args.one_shot, "route_ms": elapsed and round(elapsed * 1000, 1),
+        "one_shot": args.one_shot, "route_ms": elapsed and round(elapsed * 1000, 1), "guard": guarded,
     })
     if args.dry:
         return 0

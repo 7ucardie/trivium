@@ -25,6 +25,13 @@ What changed in Trivium, newest first. Dates are the day the change was pushed t
 
 ### Added
 
+- **Guard, 2026-11-24:** every prompt is checked before it reaches the router, the decision log or a
+  model. Secrets are redacted and invisible characters removed by default; text that poses as the
+  system or the assistant, card numbers and IBANs give a warning. Each kind can be set to `off`,
+  `warn`, `redact` or `block` in the new `guard` block. **This changes behaviour without a config
+  change:** a prompt that holds a recognised key, token or password is now sent with a placeholder in
+  its place.
+
 - **Correction model, 2026-11-24:** `ask correct` fits a logistic regression per question on the
   router's scores and `router.correction: true` applies it. Off by default.
 - **`systemone` backend, 2026-11-24:** a local server answers the questions over `POST /v1/systemone`

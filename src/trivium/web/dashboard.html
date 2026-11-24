@@ -139,6 +139,7 @@ td.num { text-align:right; font-variant-numeric:tabular-nums; }
       <span class="hint" id="d-meta"></span>
     </div>
     <div class="warn" id="d-unsure"></div>
+    <div class="warn" id="d-guard"></div>
     <div class="chips" id="d-alts" role="radiogroup" aria-label="Target"></div>
     <div id="d-answers"></div>
     <div class="row" style="margin-top:10px">
@@ -263,6 +264,9 @@ function showDecision() {
   $("run-error").textContent = "";
   $("d-meta").textContent = `${Math.round(d.route_ms)} ms · ${d.reason}` + (d.repo ? ` · repo ${d.repo}` : "");
   $("d-unsure").textContent = d.unsure.length ? "Unsure about " + d.unsure.join(", ") + ": sent to the fallback" : "";
+  $("d-guard").textContent = (d.guard || []).length
+    ? "Guard: " + d.guard.map(g => `${g.action === "redact" ? "redacted" : "found"} ${g.count} ${g.kind}`).join(", ")
+    : "";
   const alts = $("d-alts");
   alts.replaceChildren();
   for (const a of d.alternatives) {
