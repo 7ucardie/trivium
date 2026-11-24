@@ -2,7 +2,7 @@
 
 What changed in Trivium, newest first. Dates are the day the change was pushed to `main`.
 
-## Unreleased (after v0.2.0)
+## v0.3.0, 2026-11-24
 
 ### Removed
 

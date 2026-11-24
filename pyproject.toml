@@ -1,6 +1,6 @@
 [project]
 name = "trivium"
-version = "0.2.0"
+version = "0.3.0"
 description = "A local System-1 router that sends each prompt to the right model: a local Qwen, Claude Code, or Codex."
 readme = "README.md"
 license = "MIT"
