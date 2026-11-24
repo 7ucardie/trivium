@@ -11,7 +11,13 @@ import yaml
 
 USER_CONFIG = Path.home() / ".config" / "trivium" / "targets.yaml"
 VENDORS = {"local", "claude", "codex"}
-BACKENDS = ["semif", "laya", "hybrid", "systemone"]
+BACKENDS = ["semif", "laya", "systemone"]
+# Backends that no longer exist, with what to tell someone whose config still names one.
+REMOVED_BACKENDS = {
+    "hybrid": "the hybrid backend (Laya for some questions, semif for the rest) was removed on 2026-11-24: "
+              "on the 28 held-out prompts it routed 57.1% to the right target against 71.4% for semif. "
+              "Set router.backend to semif; see CHANGELOG.md",
+}
 RUNTIMES = ["mlx", "torch", "llamacpp"]
 
 
@@ -103,14 +109,15 @@ def temperatures(cfg: dict, backend: str) -> dict:
 
 def validate(cfg: dict) -> None:
     questions, targets = cfg["questions"], cfg["targets"]
+    if removed := REMOVED_BACKENDS.get(cfg["router"].get("backend", "semif")):
+        raise ValueError(f"router.backend: {removed}")
     if cfg["router"].get("backend", "semif") not in BACKENDS:
         raise ValueError(f"router.backend must be one of {BACKENDS}")
     if cfg["router"].get("runtime", "mlx") not in RUNTIMES:
         raise ValueError(f"router.runtime must be one of {RUNTIMES}")
-    for q in cfg["router"].get("hybrid_laya", []):
-        if q not in questions:
-            raise ValueError(f"router.hybrid_laya: unknown question {q!r}")
     for backend, temps in (cfg.get("calibration") or {}).items():
+        if backend in REMOVED_BACKENDS:
+            continue  # temperatures left over in calibration.yaml: unused, not worth refusing to start for
         if backend not in BACKENDS:
             raise ValueError(f"calibration: unknown backend {backend!r}")
         for q, t in (temps or {}).items():

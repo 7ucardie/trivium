@@ -144,6 +144,7 @@ The docs follow [Diátaxis](https://diataxis.fr/); start at [docs/README.md](doc
 - **How-to:** [Use the terminal app](docs/how-to/terminal-app.md) · [Use the web dashboard](docs/how-to/web-dashboard.md) · [Measure and improve the router](docs/how-to/measure-the-router.md) · [Calibrate the router](docs/how-to/calibrate.md) · [Run on Windows](docs/how-to/run-on-windows.md)
 - **Reference:** [CLI](docs/reference/cli.md) · [Configuration](docs/reference/configuration.md) · [Runtimes and backends](docs/reference/runtimes-and-backends.md) · [JSON API](docs/reference/api.md) · [Status and limits](docs/reference/stability.md)
 - **Explanation:** [How Trivium works](docs/explanation/how-trivium-works.md)
+- **Changes:** [CHANGELOG.md](CHANGELOG.md)
 
 ## Roadmap
 

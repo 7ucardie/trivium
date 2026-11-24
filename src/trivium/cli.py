@@ -43,10 +43,6 @@ def load_engine(cfg: dict, name: str):
         from .laya_engine import LayaEngine
 
         return LayaEngine(cfg["router"])
-    if name == "hybrid":
-        from .hybrid import HybridEngine
-
-        return HybridEngine(cfg["router"])
     if name == "systemone":
         from .systemone_engine import SystemOneEngine
 

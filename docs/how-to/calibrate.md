@@ -4,13 +4,13 @@ Router scores are not probabilities until you calibrate them. `ask calibrate` fi
 per question on labelled prompts and prints a block for your config:
 
 ```sh
-ask calibrate evals/prompts.jsonl --backend hybrid           # prints a block to paste
-ask calibrate evals/prompts.jsonl --backend hybrid --write   # or saves it to ~/.config/trivium/calibration.yaml
+ask calibrate evals/prompts.jsonl --backend laya           # prints a block to paste
+ask calibrate evals/prompts.jsonl --backend laya --write   # or saves it to ~/.config/trivium/calibration.yaml
 ```
 
 ```yaml
 calibration:
-  hybrid:
+  laya:
     kind: 0.6
     difficulty: 1.35
     tools: 0.25   # flagged: at the grid edge, needs more labelled data

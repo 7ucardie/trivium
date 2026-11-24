@@ -1,4 +1,4 @@
-"""Server, CLI, hybrid, Laya mapping, calibration and service, all without a real model."""
+"""Server, CLI, Laya mapping, calibration and service, all without a real model."""
 
 import io
 import json
@@ -148,15 +148,12 @@ def test_calibrate_prints_block(fake_cli, tmp_path, capsys):
     assert "calibration:\n  semif:" in out and "    kind:" in out
 
 
-def test_hybrid_splits_questions():
-    from trivium.hybrid import HybridEngine
-
-    semif, laya = FakeEngine(source="s"), FakeEngine({"x": {"tools": "workspace"}}, source="l")
-    engine = HybridEngine({"hybrid_laya": ["tools"]}, semif=semif, laya=laya)
-    probs, _ = engine.route({"request": "x"}, CFG["questions"])
-    assert semif.calls == [{"kind", "difficulty"}] and laya.calls == [{"tools"}]
-    assert list(probs) == list(CFG["questions"])
-    assert max(probs["tools"], key=probs["tools"].get) == "workspace"
+def test_removed_hybrid_backend_says_what_to_do():
+    with pytest.raises(ValueError, match="hybrid backend .* was removed on 2026-11-24.*router.backend to semif"):
+        config.validate({**CFG, "router": {**CFG["router"], "backend": "hybrid"}})
+    # leftovers of the old backend do not stop Trivium from starting
+    config.validate({**CFG, "router": {**CFG["router"], "hybrid_laya": ["tools"]},
+                     "calibration": {"hybrid": {"kind": 0.6}}})
 
 
 def test_laya_engine_maps_questions(monkeypatch):

@@ -55,5 +55,6 @@ same rules, confidence thresholds off, on an Apple M5 Pro (full write-up in
 | Hybrid: Laya typed-decisions for tools | **94.4%** | **80.6%** | **100%** | **83.3%** | 247 ms |
 
 "Right target" means the router's answers lead to the same target as the hand labels would. The
-question wording was tuned on this set with semif, which favours semif; on the larger set the hybrid
-does worse than semif (see [Backends](../reference/runtimes-and-backends.md#backends)).
+question wording was tuned on this set with semif, which favours semif. The two hybrid rows are
+history: on the larger set the hybrid did worse than semif and it was removed on 2026-11-24 (see
+[Backends](../reference/runtimes-and-backends.md#backends)).

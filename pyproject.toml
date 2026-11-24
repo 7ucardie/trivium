@@ -30,7 +30,7 @@ dependencies = [
 torch = ["torch>=2.10", "accelerate>=1.12"]
 # router.runtime: llamacpp, CPU scoring from a local GGUF file.
 llamacpp = ["llama-cpp-python==0.3.35", "numpy>=2"]
-# router.backend: laya or hybrid.
+# router.backend: laya.
 laya = ["laya>=0.3.20,<0.4"]
 
 [project.urls]

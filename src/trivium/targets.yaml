@@ -6,12 +6,10 @@
 
 router:
   # semif: Qwen decides and can answer locally. laya: faster, decides only (`uv sync --extra laya`).
-  # hybrid: Laya answers the questions in hybrid_laya, semif the rest (needs the laya extra).
   # systemone: a server you run answers over POST /v1/systemone (h2o-lightning-4b, Kev, Jev); decides only.
   backend: semif
   systemone_url: null     # systemone only, e.g. http://127.0.0.1:8080/v1/systemone. The prompt is sent there.
   systemone_timeout: 120  # systemone only: seconds to wait for an answer before using the fallback target
-  hybrid_laya: [tools]
   terminal_app: Terminal   # the dashboard's "Open in Terminal" uses this app (e.g. iTerm)
   allowed_origins: []      # other dashboards that may call the API from the browser, e.g. http://localhost:3000
   cache: false            # true: keep the router's scores on disk and reuse them for an identical prompt in the same repo
@@ -33,7 +31,7 @@ router:
   port: 8765
   laya_model: convaiinnovations/laya
   laya_revision: 55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851  # weights identical to the 2026-09-23 runs
-  # typed-decisions: 100% on tools and fewer fallbacks in the hybrid than the English checkpoint (null).
+  # typed-decisions: more often right on tools than the English checkpoint (null) on the bundled set.
   laya_subfolder: typed-decisions
   laya_max_request_chars: 300  # Laya reads ~320 tokens and cuts the end; shorter keeps the repo sentence
 

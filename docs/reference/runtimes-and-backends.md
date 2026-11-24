@@ -20,17 +20,18 @@ the 4-bit file on the CPU, which costs two prompts on this set and two seconds a
 
 - `semif` (default): Qwen3.5-4B answers all three and also answers local prompts.
 - `laya`: the Laya encoder answers all three. Faster, decides only, so local targets go to Claude.
-- `hybrid`: Laya answers the questions listed in `router.hybrid_laya` (default `[tools]`), semif the
-  rest. It looked best on the first 36 prompts, but on the 100-prompt set it routes general questions
-  typed inside a repository ("what does ECONNREFUSED mean") as if they needed the workspace, and it
-  scores 57.1% against semif's 71.4% on the held-out prompts. Use semif unless your own evaluation
-  says otherwise.
 
 - `systemone`: a server you run answers the questions over `POST /v1/systemone`, the API that
   h2o-lightning-4b, Kev and Jev share. Decides only, so local targets go to Claude. See
   [System One backend](#system-one-backend).
 
-`laya` and `hybrid` need `uv sync --extra laya`.
+`laya` needs `uv sync --extra laya`.
+
+The `hybrid` backend (Laya for the tools question, semif for the rest) was removed on 2026-11-24. It
+looked best on the first 36 prompts, but on the 100-prompt set it routed general questions typed inside
+a repository ("what does ECONNREFUSED mean") as if they needed the workspace, and scored 57.1% against
+semif's 71.4% on the held-out prompts. A config that still says `backend: hybrid` is refused with that
+explanation; set it to `semif`. See the [changelog](../../CHANGELOG.md).
 
 `ask serve` reports which backend it runs. If your config names another one, `ask` loads the
 configured backend in-process rather than read one router's scores with another's calibration;
@@ -44,7 +45,7 @@ that moves Laya's "needs the workspace" score from 0.15 both inside and outside 
 inside and 0.08 outside, and leaves the bundled set unchanged (its longest prompt is 147 characters).
 The 300 was chosen on two made-up long prompts, so treat it as a starting point.
 
-Laya defaults to its `typed-decisions` checkpoint. In the hybrid it scored 100% on tools against the
+Laya defaults to its `typed-decisions` checkpoint. In the former hybrid backend it scored 100% on tools against the
 English checkpoint's 97.2%, and sent 8.3% of prompts to the fallback instead of 13.9%, because it
 reports its answers more confidently. Both differences are one or two prompts on the bundled set.
 
