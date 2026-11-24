@@ -20,6 +20,18 @@ instead of the fallback.
 `--via` keeps the strength and swaps the vendor: a route to Claude Opus becomes Codex gpt-6-astra, and a
 route to Codex gpt-6-sol becomes Claude Sonnet.
 
+## Measuring and fitting
+
+```sh
+ask eval evals/prompts.jsonl                # how often the router picks the right answers and target
+ask calibrate evals/prompts.jsonl --write   # fit one temperature per question
+ask correct evals/scores/qwen3.5-4b-llamacpp-q4.jsonl --write   # fit a correction model on the scores
+ask export --out mine.jsonl                 # decision log -> labelled prompts, with the router's scores
+```
+
+See [Measure and improve the router](../how-to/measure-the-router.md) and
+[Calibrate the router](../how-to/calibrate.md).
+
 ## Service
 
 `ask` works without `ask serve`, but then it loads the model for every prompt, which takes several

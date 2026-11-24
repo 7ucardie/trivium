@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from importlib.resources import files
 from pathlib import Path
@@ -10,14 +11,15 @@ import yaml
 
 USER_CONFIG = Path.home() / ".config" / "trivium" / "targets.yaml"
 VENDORS = {"local", "claude", "codex"}
-BACKENDS = ["semif", "laya", "hybrid"]
+BACKENDS = ["semif", "laya", "hybrid", "systemone"]
 RUNTIMES = ["mlx", "torch", "llamacpp"]
 
 
 def answers_locally(cfg: dict) -> bool:
-    """Whether local targets can be answered: Laya only decides, and so does the llama.cpp runtime."""
+    """Whether local targets can be answered: Laya, a System One server and llama.cpp only decide."""
     router = cfg["router"]
-    return router.get("backend", "semif") != "laya" and router.get("runtime", "mlx") != "llamacpp"
+    return (router.get("backend", "semif") not in ("laya", "systemone")
+            and router.get("runtime", "mlx") != "llamacpp")
 
 
 def config_path() -> Path:
@@ -53,6 +55,39 @@ def write_calibration(backend: str, temperatures: dict) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("# Written by `ask calibrate --write`. Per backend, per question: p ** (1/T).\n"
                     + yaml.safe_dump(current, sort_keys=False))
+    return path
+
+
+def correction_path() -> Path:
+    """Where `ask correct --write` keeps the fitted correction models, one per backend."""
+    if env := os.environ.get("TRIVIUM_CORRECTION"):
+        return Path(env).expanduser()
+    return USER_CONFIG.parent / "correction.json"
+
+
+def correction(cfg: dict, backend: str) -> dict | None:
+    """The fitted correction model for this backend when router.correction is on, else None."""
+    if not cfg["router"].get("correction"):
+        return None
+    from . import correct
+
+    path = correction_path()
+    model = (json.loads(path.read_text()) if path.exists() else {}).get(backend)
+    if not model:
+        raise ValueError(f"router.correction is on but {path} has no model for the {backend} router; "
+                         "fit one with `ask correct <labelled prompts> --write`")
+    if model["layout"] != correct.layout(cfg["questions"]):
+        raise ValueError(f"the correction model in {path} was fitted for other questions or options; "
+                         "fit it again with `ask correct <labelled prompts> --write`")
+    return model
+
+
+def write_correction(backend: str, model: dict) -> Path:
+    path = correction_path()
+    current = json.loads(path.read_text()) if path.exists() else {}
+    current[backend] = model
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(current))
     return path
 
 

@@ -154,6 +154,8 @@ The current limits are in [Status and limits](docs/reference/stability.md).
 
 **Later:**
 
+- **A correction model on by default:** `ask correct` fits one on the router's scores; it ships off until it is measured on prompts from real use.
+- **Hosted System One services:** the `systemone` backend talks to a local server only, without credentials.
 - **A trained router:** the decision log is the data for training one.
 - **`torch` on a CUDA GPU:** tested on Apple MPS only.
 - **`ask service` on Linux:** it uses launchd on macOS and a scheduled task on Windows.

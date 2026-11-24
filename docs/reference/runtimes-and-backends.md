@@ -26,6 +26,10 @@ the 4-bit file on the CPU, which costs two prompts on this set and two seconds a
   scores 57.1% against semif's 71.4% on the held-out prompts. Use semif unless your own evaluation
   says otherwise.
 
+- `systemone`: a server you run answers the questions over `POST /v1/systemone`, the API that
+  h2o-lightning-4b, Kev and Jev share. Decides only, so local targets go to Claude. See
+  [System One backend](#system-one-backend).
+
 `laya` and `hybrid` need `uv sync --extra laya`.
 
 `ask serve` reports which backend it runs. If your config names another one, `ask` loads the
@@ -57,3 +61,31 @@ uv sync --extra laya
 ```
 
 Laya only decides, so with this backend local targets are routed to Claude instead.
+
+## System One backend
+
+Trivium sends the evidence and the three questions to a server and reads back a probability per option.
+Nothing is loaded in Trivium itself, so `router.runtime` and `router.model` are ignored.
+
+```yaml
+router:
+  backend: systemone
+  systemone_url: http://127.0.0.1:8080/v1/systemone
+  systemone_timeout: 120   # seconds
+```
+
+For [h2o-lightning-4b](https://huggingface.co/h2oai/h2o-lightning-4b), start llama.cpp's `llama-server`
+(build 11773 or later) with the model's native GGUF file:
+
+```sh
+llama-server -m h2o-lightning-4b-Q4_K_M.gguf -c 8192 -np 1 --host 127.0.0.1 --port 8080
+```
+
+The prompt and the repository name are sent to `systemone_url`. With a local address they stay on your
+machine; with a hosted service they leave it. Trivium sends no credentials, so a service that needs an
+API key is not supported yet.
+
+On the 255 labelled prompts h2o-lightning-4b routed 75.7% to the right target against 71.8% for
+Qwen3.5-4B through semif, at about the same time per prompt on a CPU. The difference is within what
+chance can produce on this set. Details:
+[evals/results/2026-11-17-model-comparison.md](../../evals/results/2026-11-17-model-comparison.md).

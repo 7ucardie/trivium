@@ -36,7 +36,7 @@ ask service install        # or: a task that starts `ask serve` at every logon
 ```
 
 `ask service install` creates the scheduled task `Trivium`, which needs an administrator prompt. It
-runs in a minimised window and logs to `%LOCALAPPDATA%\trivium\trivium.log`.
+runs without a window and logs to `%LOCALAPPDATA%\trivium\trivium.log`.
 
 ## What differs from macOS
 

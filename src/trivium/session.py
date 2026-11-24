@@ -59,8 +59,8 @@ class Router:
                 alternatives.append({**self.target_info(name), "p": round(p, 4)})
         decision_id = log.append({
             "type": "decision", "prompt": prompt, "cwd": cwd, "repo": repo, "backend": self.name,
-            "answers": decision.answers, "routed": routed, "target": decision.target,
-            "reason": decision.reason, "via": None, "manual": False, "one_shot": False,
+            "answers": decision.answers, "scores": decision.scores, "routed": routed,
+            "target": decision.target, "reason": decision.reason, "via": None, "manual": False, "one_shot": False,
             "route_ms": round(elapsed * 1000, 1),
         })
         return {

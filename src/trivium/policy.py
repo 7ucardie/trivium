@@ -15,6 +15,7 @@ class Decision:
     reason: str
     answers: dict = field(default_factory=dict)  # qid -> {"choice", "p", "probabilities"}
     unsure: list = field(default_factory=list)
+    scores: dict = field(default_factory=dict)  # the router's raw scores, before any correction
 
 
 def temper(probs: dict, temperature: float) -> dict:

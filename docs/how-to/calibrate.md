@@ -50,3 +50,37 @@ On 119 held-out prompts this raised difficulty accuracy from 79.0% to 85.7% (mod
 right target from 73.9% to 78.2%, and cut the prompts sent to a model that was too weak from 13 to 7.
 It ships off because the gain was not statistically significant on that set (paired test p = 0.30,
 10 prompts fixed against 5 broken). Details: [evals/results/2026-09-26-difficulty.md](../../evals/results/2026-09-26-difficulty.md).
+
+## Correction model
+
+Option weights and temperatures each correct one question on its own. A correction model goes further:
+one small logistic regression per question that reads the router's scores for all three questions,
+because the scores of one question say something about another. When it is on it replaces the option
+weights and the temperatures.
+
+```sh
+ask correct evals/scores/qwen3.5-4b-llamacpp-q4.jsonl           # fit and report, nothing saved
+ask correct evals/scores/qwen3.5-4b-llamacpp-q4.jsonl --write   # save to ~/.config/trivium/correction.json
+```
+
+```yaml
+router:
+  correction: true
+```
+
+- **Input:** labelled prompts, one or more files. Rows that carry the router's scores in `probs` (the
+  files in `evals/scores/` and the rows `ask export` writes) are used as they are; other rows are routed
+  first.
+- **Check:** rows with `"split": "test"` are never fitted on. `ask correct` reports how many answers and
+  targets are right on those rows with and without the model.
+- **One model per backend:** scores from another model, runtime or quantisation are on another scale.
+  Fit on scores from the router you run, and fit again after changing the questions or their options;
+  Trivium refuses a model fitted for other questions.
+
+It ships off, and no fitted model is bundled. On the 255 labelled prompts, scored by Qwen3.5-4B on
+`llamacpp`, the model routed 79% to the right target against 72% without it (5-fold cross-validation),
+and 24 of the 28 held-out prompts against 19. Those are prompts written for the evaluation, not prompts
+from real use. Details: [evals/results/2026-11-17-correction-model.md](../../evals/results/2026-11-17-correction-model.md).
+
+To fit on your own prompts: rate decisions for a while, run `ask export --out mine.jsonl`, check the
+rows marked `needs_review`, and pass `mine.jsonl` to `ask correct` together with the bundled scores.

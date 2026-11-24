@@ -230,6 +230,8 @@ def test_service_windows_script(monkeypatch):
     lines = service.win_script().split("\r\n")
     assert 'set "HF_HUB_OFFLINE=1"' in lines and r'set "TRIVIUM_CONFIG=C:\cfg\targets.yaml"' in lines
     assert lines[-2].startswith(r'"C:\bin\ask.exe" serve >> "') and lines[-2].endswith('trivium.log" 2>&1')
+    # no window: nothing to close or interrupt by accident
+    assert service.win_task_command(pathlib.Path("serve.cmd")) == 'conhost.exe --headless cmd /c "serve.cmd"'
 
 
 def test_resolve_runs_an_npm_shim_without_cmd_exe(tmp_path, monkeypatch):
@@ -419,6 +421,7 @@ def test_runtime_config():
     assert config.answers_locally(CFG)
     assert not config.answers_locally({**CFG, "router": {**CFG["router"], "runtime": "llamacpp"}})
     assert not config.answers_locally({**CFG, "router": {**CFG["router"], "backend": "laya"}})
+    assert not config.answers_locally({**CFG, "router": {**CFG["router"], "backend": "systemone"}})
     assert engine.gguf_path({"gguf": "/models/q.gguf"}) == "/models/q.gguf"
     with pytest.raises(ValueError, match="gguf"):
         engine.gguf_path({})
@@ -485,3 +488,114 @@ def test_eval_split_filters_rows(fake_cli, tmp_path, capsys):
     assert capsys.readouterr().out.startswith("1 prompts (test)")
     with pytest.raises(SystemExit):
         cli.cmd_eval([str(f), "--split", "holdout"])
+
+
+# --- correction model -------------------------------------------------------------
+
+def _scores(difficulty_p):
+    """Router scores that always lean to "trivial", with the given score for "moderate"."""
+    return {"kind": {o: 1 / 6 for o in CFG["questions"]["kind"]["options"]},
+            "difficulty": {"trivial": 0.9 - difficulty_p, "moderate": difficulty_p, "hard": 0.1},
+            "tools": {"none": 0.2, "workspace": 0.8}}
+
+
+def test_correction_learns_what_the_router_gets_wrong():
+    from trivium import correct
+
+    # The router says "trivial" every time; the labels say "moderate" whenever moderate scores 0.3 or more.
+    samples = [(_scores(p), {"kind": "code_change", "difficulty": "moderate" if p >= 0.3 else "trivial",
+                             "tools": "workspace"}) for p in (0.05, 0.1, 0.15, 0.2, 0.3, 0.35, 0.4, 0.44) * 3]
+    model = correct.fit(samples, CFG["questions"])
+    fixed = correct.apply(model, _scores(0.4))
+    assert max(_scores(0.4)["difficulty"], key=_scores(0.4)["difficulty"].get) == "trivial"
+    assert max(fixed["difficulty"], key=fixed["difficulty"].get) == "moderate"
+    low = correct.apply(model, _scores(0.05))
+    assert max(low["difficulty"], key=low["difficulty"].get) == "trivial"
+    assert abs(sum(fixed["kind"].values()) - 1) < 1e-9
+    assert fixed["difficulty"]["hard"] == 0.0  # never labelled, so never chosen
+
+
+def test_correct_writes_a_model_and_route_uses_it(fake_cli, tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("TRIVIUM_CORRECTION", str(tmp_path / "correction.json"))
+    rows = [{"prompt": f"p{i}", "split": "test" if i % 4 == 0 else None, "probs": _scores(p),
+             "expect": {"kind": "code_change", "difficulty": "moderate" if p >= 0.3 else "trivial",
+                        "tools": "workspace"}}
+            for i, p in enumerate((0.05, 0.1, 0.15, 0.2, 0.3, 0.35, 0.4, 0.44) * 3)]
+    f = tmp_path / "scores.jsonl"
+    f.write_text("\n".join(json.dumps(r) for r in rows))
+    engine, _ = fake_cli
+    assert cli.cmd_correct([str(f), "--write"]) == 0
+    out = capsys.readouterr().out
+    assert "fitted on 18 prompts" in out and "on the 6 prompts" in out and "Saved to" in out
+    assert engine.calls == []  # rows that carry scores are not routed again
+
+    off = config.load(config.config_path())
+    assert config.correction(off, "semif") is None  # ships off
+    on = {**off, "router": {**off["router"], "correction": True}}
+    assert cli.answers_for(on, "semif", _scores(0.4))["difficulty"]["choice"] == "moderate"
+    assert cli.answers_for(off, "semif", _scores(0.4))["difficulty"]["choice"] == "trivial"
+    decision, _ = cli.route(on, engine, "what does 409 mean", None, "semif")
+    assert set(decision.scores) == set(CFG["questions"])  # the raw scores stay available for the log
+    with pytest.raises(ValueError, match="no model for the laya router"):
+        config.correction(on, "laya")
+    other = {**on, "questions": {**on["questions"], "tools": {"question": "?", "options": {"a": "a", "b": "b"}}}}
+    with pytest.raises(ValueError, match="other questions"):
+        config.correction(other, "semif")
+
+
+def test_export_keeps_the_raw_scores():
+    record = {**decision("a", "add retry", CODE, "codex-sol"), "scores": {"kind": {"code_change": 1.0}}}
+    rows, _ = export.rows_from_log([record], CFG)
+    assert rows[0]["probs"] == {"kind": {"code_change": 1.0}}
+
+
+# --- System One backend -------------------------------------------------------------
+
+def test_systemone_engine_asks_the_server_and_maps_the_answers():
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    from trivium.systemone_engine import SystemOneEngine
+
+    seen = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            seen["path"] = self.path
+            seen["body"] = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            answers = {q: {"probabilities": {o: (0.7 if i == 1 else 0.3 / (len(spec["criteria"]) - 1))
+                                             for i, o in enumerate(spec["criteria"])}}
+                       for q, spec in seen["body"]["questions"].items()}
+            payload = json.dumps({"answers": answers} if self.path == "/v1/systemone" else {"answers": {}}).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *args):
+            pass
+
+    httpd = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+    try:
+        engine = cli.load_engine({"router": {"systemone_url": base + "/v1/systemone"}}, "systemone")
+        probs, timing = engine.route({"request": "add retry"}, CFG["questions"])
+        assert seen["body"]["state"] == {"request": "add retry"}
+        assert seen["body"]["questions"]["tools"] == {
+            "type": "choice", "instructions": CFG["questions"]["tools"]["question"],
+            "criteria": CFG["questions"]["tools"]["options"]}
+        assert max(probs["kind"], key=probs["kind"].get) == "code_change" and timing["total_seconds"] >= 0
+        with pytest.raises(RuntimeError, match="left out an answer"):
+            SystemOneEngine({"systemone_url": base + "/other"}).route({"request": "x"}, CFG["questions"])
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+    with pytest.raises(RuntimeError, match="did not answer"):
+        engine.route({"request": "x"}, CFG["questions"])  # the server is gone
+    # A router that is down does not block the prompt: it goes to the fallback, with the reason.
+    decision, _ = cli.route(CFG, engine, "add retry", None, "systemone")
+    assert decision.target == CFG["fallback"] and decision.reason.startswith("router failed")
+    with pytest.raises(ValueError, match="systemone_url"):
+        SystemOneEngine({"systemone_url": "file:///etc/passwd"})
+    with pytest.raises(RuntimeError, match="only decides"):
+        engine.generate("hi")

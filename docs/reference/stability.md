@@ -6,6 +6,8 @@
 - Only the `mlx` runtime has been used day to day. `torch` was tested on Apple MPS, not on a CUDA
   GPU; `llamacpp` was tested on an Apple CPU. Both match the MLX routing closely on the bundled set
   (see [Runtimes](runtimes-and-backends.md#runtimes)), but treat them as new.
+- The correction model (`ask correct`) and the `systemone` backend are new: measured on 255 prompts
+  written for the evaluation, on one Windows machine. Both ship off.
 - `ask service` uses launchd on macOS and a scheduled task on Windows; there is none for Linux.
 - Windows was tested on one machine, with the `llamacpp` runtime: routing, the API, one-shot answers and
   opening a console. The terminal app and `--ask` are written for it but were not tried by hand.

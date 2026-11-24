@@ -96,6 +96,12 @@ def win_script() -> str:
                         f'"{ask}" {" ".join(args)} >> "{WIN_DIR / "trivium.log"}" 2>&1', ""])
 
 
+def win_task_command(script: Path) -> str:
+    """No window: a visible one was closed or interrupted by accident, which stopped the server.
+    (A task that runs outside the user's session would need the account's password.)"""
+    return f'conhost.exe --headless cmd /c "{script}"'
+
+
 def _schtasks(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["schtasks", *args], capture_output=True, text=True)
 
@@ -118,9 +124,15 @@ def _win_stop() -> None:
 
         from .server import port_free
 
-        for _ in range(50):  # `ask serve` refuses to start while the port is still closing
-            if port_free(port):
-                break
+        # A new server cannot start while the port is still closing, or while the old `cmd` still holds
+        # the log open: its `>>` then fails and the task ends without starting anything.
+        for _ in range(50):
+            try:
+                open(WIN_DIR / "trivium.log", "a").close()
+                if port_free(port):
+                    break
+            except OSError:
+                pass
             time.sleep(0.1)
 
 
@@ -129,9 +141,7 @@ def _win_install() -> int:
     script = WIN_DIR / "serve.cmd"
     script.write_text(win_script(), newline="")
     _win_stop()
-    # A minimised window: a task that runs without one needs the account's password.
-    result = _schtasks("/Create", "/F", "/TN", TASK, "/SC", "ONLOGON",
-                       "/TR", f'cmd /c start "trivium" /min cmd /c "{script}"')
+    result = _schtasks("/Create", "/F", "/TN", TASK, "/SC", "ONLOGON", "/TR", win_task_command(script))
     if result.returncode != 0:
         print(f"trivium: schtasks failed: {(result.stderr or result.stdout).strip()}", file=sys.stderr)
         return 1

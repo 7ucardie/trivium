@@ -14,6 +14,7 @@
   ask rate good|bad [--should T]     label the last decision
   ask eval evals/prompts.jsonl       measure router accuracy on labelled prompts
   ask calibrate evals/prompts.jsonl  fit per-question temperatures from labelled prompts
+  ask correct evals/prompts.jsonl    fit a correction model on the router's scores
   ask export --out mine.jsonl        turn the decision log into labelled prompts to review
   ask targets                        list targets and the config in use
   ask token                          the API token for connecting another dashboard
@@ -30,7 +31,7 @@ import time
 from . import config, launch, log, policy, server, state
 from .server import Remote
 
-BACKENDS = ["semif", "laya", "hybrid"]
+BACKENDS = config.BACKENDS
 
 
 def backend_name(cfg: dict, name: str | None = None) -> str:
@@ -46,6 +47,10 @@ def load_engine(cfg: dict, name: str):
         from .hybrid import HybridEngine
 
         return HybridEngine(cfg["router"])
+    if name == "systemone":
+        from .systemone_engine import SystemOneEngine
+
+        return SystemOneEngine(cfg["router"])
     from .engine import Engine
 
     return Engine(cfg["router"])
@@ -90,9 +95,26 @@ def raw_route(cfg: dict, engine, prompt: str, repo: str | None, cache_as: str | 
 
 
 def route(cfg: dict, engine, prompt: str, repo: str | None, name: str) -> tuple[policy.Decision, float]:
-    probs, elapsed = raw_route(cfg, engine, prompt, repo, name if cfg["router"].get("cache") else None)
-    answers = policy.summarize(probs, config.temperatures(cfg, name), config.option_weights(cfg))
-    return policy.decide(cfg, answers), elapsed
+    started = time.perf_counter()
+    try:
+        probs, elapsed = raw_route(cfg, engine, prompt, repo, name if cfg["router"].get("cache") else None)
+    except (RuntimeError, OSError) as error:
+        # A router that is down must not block the prompt: send it to the fallback and say why.
+        print(f"trivium: the router failed ({error}); using the fallback {cfg['fallback']}", file=sys.stderr)
+        return policy.Decision(cfg["fallback"], f"router failed: {error}"), time.perf_counter() - started
+    decision = policy.decide(cfg, answers_for(cfg, name, probs))
+    decision.scores = probs
+    return decision, elapsed
+
+
+def answers_for(cfg: dict, name: str, probs: dict) -> dict:
+    """Router scores -> answers. The correction model, when on, replaces option weights and
+    temperatures: it is fitted on the raw scores and learns both."""
+    if model := config.correction(cfg, name):
+        from . import correct
+
+        return policy.summarize(correct.apply(model, probs))
+    return policy.summarize(probs, config.temperatures(cfg, name), config.option_weights(cfg))
 
 
 def describe(cfg: dict, decision: policy.Decision, elapsed: float | None, verbose: bool) -> str:
@@ -192,8 +214,8 @@ def run(argv: list[str]) -> int:
         print(describe(cfg, decision, elapsed, args.verbose or args.dry), file=sys.stderr)
     log.append({
         "type": "decision", "prompt": prompt, "cwd": cwd, "repo": repo, "backend": name,
-        "answers": decision.answers, "routed": routed, "target": decision.target,
-        "reason": decision.reason, "via": args.via, "manual": bool(args.to or picked),
+        "answers": decision.answers, "scores": decision.scores, "routed": routed,
+        "target": decision.target, "reason": decision.reason, "via": args.via, "manual": bool(args.to or picked),
         "one_shot": args.one_shot, "route_ms": elapsed and round(elapsed * 1000, 1),
     })
     if args.dry:
@@ -301,7 +323,7 @@ def cmd_eval(argv: list[str]) -> int:
     for row in rows:
         probs, elapsed = raw_route(cfg, engine, row["prompt"], row.get("repo"))
         expected = policy.decide(cfg, {q: {"choice": c, "p": 1.0} for q, c in row["expect"].items()}).target
-        scored.append((row, policy.summarize(probs, temps, config.option_weights(cfg)), expected, elapsed))
+        scored.append((row, answers_for(cfg, name, probs), expected, elapsed))
     hits = {q: 0 for q in cfg["questions"]}
     targets_hit, unsure, misses = 0, 0, []
     for row, answers, expected, _ in scored:
@@ -319,7 +341,7 @@ def cmd_eval(argv: list[str]) -> int:
     n = len(rows)
     times = sorted(t for *_, t in scored)
     print(f"{n} prompts{f' ({args.split})' if args.split else ''} · router {engine.metadata['source']}"
-          + (" · calibrated" if temps else ""))
+          + (" · corrected" if cfg["router"].get("correction") else " · calibrated" if temps else ""))
     for q, h in hits.items():
         print(f"  {q:<11} {h / n:6.1%}")
     print(f"  {'target':<11} {targets_hit / n:6.1%}   (same target as the labels would route to)")
@@ -399,6 +421,63 @@ def cmd_calibrate(argv: list[str]) -> int:
     return 0
 
 
+def cmd_correct(argv: list[str]) -> int:
+    from . import correct
+
+    parser = argparse.ArgumentParser(
+        prog="ask correct",
+        description="Fit a correction model on the router's scores. Rows with split \"test\" are never "
+                    "fitted on; they show what the model changes.")
+    parser.add_argument("files", nargs="+", help="labelled prompts; rows that carry \"probs\" (ask export, "
+                                                 "evals/scores) are not routed again")
+    parser.add_argument("--backend", choices=BACKENDS, help="router to correct (default: config)")
+    parser.add_argument("--write", action="store_true", help=f"save the model to {config.correction_path()}")
+    args = parser.parse_args(argv)
+    cfg = config.load()
+    name = backend_name(cfg, args.backend)
+    rows = [row for f in args.files for row in _labelled(f)]
+    engine = None
+    for row in rows:
+        if "probs" not in row:
+            engine = engine or backend(cfg, name)
+            row["probs"], _ = raw_route(cfg, engine, row["prompt"], row.get("repo"))
+    train = [r for r in rows if r.get("split") != "test"]
+    held = [r for r in rows if r.get("split") == "test"]
+    if not train:
+        raise SystemExit("trivium: every row has split \"test\"; nothing to fit on")
+    model = correct.fit([(r["probs"], r["expect"]) for r in train], cfg["questions"])
+    print(f"fitted on {len(train)} prompts · router {name}")
+    if held:
+        def right(answers_of):
+            hits = {q: 0 for q in cfg["questions"]}
+            target = 0
+            for r in held:
+                answers = answers_of(r["probs"])
+                for q, want in r["expect"].items():
+                    hits[q] += answers[q]["choice"] == want
+                wanted = policy.decide(cfg, {q: {"choice": c, "p": 1.0} for q, c in r["expect"].items()}).target
+                target += policy.decide({**cfg, "min_confidence": {}}, answers).target == wanted
+            return {**hits, "target": target}
+
+        before = right(lambda p: policy.summarize(p, config.temperatures(cfg, name), config.option_weights(cfg)))
+        after = right(lambda p: policy.summarize(correct.apply(model, p)))
+        print(f"  on the {len(held)} prompts with split \"test\" (not fitted on):")
+        print(f"  {'':<11} {'router':>7} {'corrected':>10}")
+        for key in before:
+            print(f"  {key:<11} {before[key] / len(held):7.1%} {after[key] / len(held):10.1%}")
+    else:
+        print("  no rows with split \"test\": nothing to check the model on")
+    if args.write:
+        path = config.write_correction(name, model)
+        print(f"\nSaved to {path}. Turn it on with router.correction: true in {config.config_path()}.")
+    else:
+        print("\nNot saved; re-run with --write to keep it.")
+    if len(train) < 200:
+        print(f"\nOnly {len(train)} labelled prompts: a model fitted on so few can do more harm than good.",
+              file=sys.stderr)
+    return 0
+
+
 def cmd_export(argv: list[str]) -> int:
     from . import export
 
@@ -452,6 +531,7 @@ COMMANDS = {
     "rate": cmd_rate,
     "eval": cmd_eval,
     "calibrate": cmd_calibrate,
+    "correct": cmd_correct,
     "export": cmd_export,
     "targets": cmd_targets,
     "token": cmd_token,

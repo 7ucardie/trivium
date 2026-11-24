@@ -10,6 +10,7 @@ import pytest
 # Test the shipped config, not the one in the developer's ~/.config/trivium.
 os.environ["TRIVIUM_CONFIG"] = str(Path(__file__).parent.parent / "src" / "trivium" / "targets.yaml")
 os.environ["TRIVIUM_CALIBRATION"] = str(Path(__file__).parent / "no-calibration.yaml")
+os.environ["TRIVIUM_CORRECTION"] = str(Path(__file__).parent / "no-correction.json")
 
 REAL = {"Popen": subprocess.Popen, "run": subprocess.run}
 FORBIDDEN = {"claude", "codex", "open"}

@@ -74,3 +74,15 @@ about another. It costs no extra time per prompt.
 Build it only after the same comparison on prompts from real use (`ask export`), and after the model
 comparison of this round (Qwen3.5-2B and 9B, h2o-lightning-4b) shows which router the correction
 should sit on.
+
+## Built, 2026-11-24
+
+The "per question, all scores" variant is now in Trivium as `ask correct` and `router.correction`
+(off by default), in pure Python without scikit-learn. Fitted on the 227 prompts outside the held-out
+split, it gives the same 24 of 28 (85.7%) on the held-out prompts as the experiment; kind goes from
+85.7% to 96.4%, difficulty from 82.1% to 85.7%, tools from 82.1% to 96.4%. One 5-fold
+cross-validation over all 255 prompts gave 80.4% right target.
+
+```sh
+ask correct evals/scores/qwen3.5-4b-llamacpp-q4.jsonl
+```

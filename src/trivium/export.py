@@ -75,6 +75,7 @@ def rows_from_log(records: list[dict], cfg: dict, only_rated: bool = False,
             "expect": expect,
             "label": label,
             "needs_review": label != "confirmed-target",
+            **({"probs": r["scores"]} if r.get("scores") else {}),
             "source": {"decision": r["id"], "routed": r.get("routed"), "target": r.get("target"),
                        "verdict": (fb or {}).get("verdict"), "should": should},
         }
